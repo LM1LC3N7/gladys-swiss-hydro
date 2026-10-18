@@ -18,7 +18,7 @@
 //     gap: nobody saw the rise);
 //   - when the source or the discharge unit of the station changed (the
 //     values are not comparable);
-//   - for the danger level, when it was unknown just before (unknown -> 3).
+//   - for the danger level, when no level is known since the last reset.
 // -----------------------------------------------------------------------------
 
 import {

@@ -30,7 +30,8 @@
       2329, 2353, 2356, 2404, 2492, 2631, 2632, 2650, 520): no flow for them
       with the FOEN source (2492 gives 749, l/s by the look of it);
       swisshydroapi gives their unit. Ask the FOEN to add the unit to
-      LINDAS?- [ ] A water level of exactly 0.000 m is dropped (how LINDAS shows a broken
+      LINDAS?
+- [ ] A water level of exactly 0.000 m is dropped (how LINDAS shows a broken
       level sensor, e.g. 2602 Domat/Ems on 2026-10-18). A relative-height
       station could truly read 0: never seen.
 - [ ] Rate limits: neither LINDAS nor swisshydroapi documents one; 429 and
@@ -61,7 +62,7 @@
   swisshydroapi is what swisshydrodata (the reference to port) reads: ported
   as the second source (`/stations`, `/station/<id>`), because it has the
   units and more stations (331 against 233).
-- **No computed danger level (review B1, Louis's decision)**: the danger
+- **No computed danger level (review B1, decision of the review)**: the danger
   level and the `danger_level_reached` event come only from LINDAS (the
   official level); an `Undefined` level publishes nothing. With
   swisshydroapi there is no danger-level feature and no danger event. The
@@ -100,8 +101,10 @@
 - **Scene events (review I3)**: the trigger state is committed with the
   reading, the events go to a persisted queue (50 at most) sent at once,
   replayed at every tick and connection when Gladys refused them, dropped
-  after 30 minutes (a late alarm is a wrong alarm). Never sent twice: an
-  event leaves the queue only once Gladys took it.
+  after 30 minutes (a late alarm is a wrong alarm). Sent once in principle,
+  twice at worst after a crash (an event leaves the queue only once Gladys
+  took it, and the queue is saved after). An event Gladys refuses for good
+  (a 4xx other than 429) is dropped at once instead of blocking the queue.
 - **Trigger resets (reviews I4, M2)**: the trigger state of a station holds
   its source, its discharge unit and the date of its last reading; another
   source, another unit or a gap over 3 hours gives a fresh state that only
@@ -111,7 +114,8 @@
   counts as read.
 - **Thresholds layer (review I6)**: merged into the known one (a known unit
   or threshold is never replaced by none, a station missing from a new layer
-  keeps its facts); a layer where no station has a discharge unit is
+  keeps its facts); the units are kept from one layer to the next, but the
+  thresholds always come from the fresh layer; a layer where no station has a discharge unit is
   refused; a dedicated status line says when it is unavailable.
 - **Danger hysteresis (review I7)**: a fired level is re-armed only after the
   danger level stayed under it for 30 minutes (2, 3, 2, 3, 2, 3 fires once).

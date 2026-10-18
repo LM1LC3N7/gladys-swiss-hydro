@@ -332,19 +332,25 @@ export function parseThresholds(body) {
 }
 
 /**
- * Merge a new thresholds layer into the known one: a station missing from
- * the new layer keeps its facts, and a known discharge unit is never
- * replaced by none.
+ * Merge a new thresholds layer into the known one: the discharge units are
+ * kept from one layer to the next (a known unit is never replaced by none,
+ * a station missing from the new layer keeps it), but the thresholds always
+ * come from the fresh layer (a station without them there has none).
  */
 export function mergeThresholds(known, fresh) {
-  const merged = new Map(known);
+  const merged = new Map();
+  for (const [id, old] of known) {
+    if (old.flowUnit) {
+      merged.set(id, { kind: old.kind, metric: 'flow', flowUnit: old.flowUnit, thresholds: null });
+    }
+  }
   for (const [id, entry] of fresh) {
     const old = known.get(id);
+    const flowUnit = entry.flowUnit ?? old?.flowUnit ?? null;
     merged.set(id, {
       ...entry,
-      flowUnit: entry.flowUnit ?? old?.flowUnit ?? null,
-      thresholds: entry.thresholds ?? old?.thresholds ?? null,
-      metric: entry.metric ?? old?.metric ?? null,
+      flowUnit,
+      metric: entry.metric ?? (flowUnit ? 'flow' : null),
     });
   }
   return merged;

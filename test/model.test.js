@@ -249,7 +249,7 @@ test('the discharge unit of LINDAS comes from the thresholds layer', () => {
   assert.equal(unknown.level, 523.718);
 });
 
-test('the thresholds layer merged: a known unit or threshold is never lost', () => {
+test('the thresholds layer merged: units kept, thresholds always fresh', () => {
   const known = new Map([
     ['2135', { kind: 'river', metric: 'flow', flowUnit: 'm3/s', thresholds: [360, 430, 500, 560] }],
     ['2206', { kind: 'river', metric: 'flow', flowUnit: 'l/s', thresholds: null }],
@@ -262,9 +262,12 @@ test('the thresholds layer merged: a known unit or threshold is never lost', () 
     ],
   ]);
   const merged = mergeThresholds(known, fresh);
-  assert.deepEqual(merged.get('2135'), known.get('2135'), 'nothing replaced by null');
+  assert.equal(merged.get('2135').flowUnit, 'm3/s', 'a known unit is never replaced by null');
+  assert.equal(merged.get('2135').thresholds, null, 'thresholds only from the fresh layer');
   assert.equal(merged.get('2206').flowUnit, 'l/s', 'missing from the new layer: kept');
+  assert.equal(merged.get('2206').thresholds, null);
   assert.equal(merged.get('2009').flowUnit, 'm3/s');
+  assert.deepEqual(merged.get('2009').thresholds, [700, 1000, 1200, 1400]);
 });
 
 test('swisshydroapi: one station, its units and its dates, never a danger level', () => {

@@ -94,6 +94,7 @@ more if a service is down: they never replace the official warnings.
   that layer, the FOEN source gives no flow** (LINDAS does not say whether a
   station is in m³/s or l/s); the other values go on. A station missing from
   the layer has no flow with the FOEN source: choose swisshydroapi for it.
+- **Do not rely on an old danger level.** With the swisshydroapi source, or when LINDAS stops giving a level for a station, nothing new is published for it: Gladys keeps showing the last value it received, which may be outdated. Check the date of the measurement and the official warnings.
 - If Gladys does not give the configuration at start, the integration says it
   in its status and asks again after 1 minute, then 2, 4... up to 30.
 - Nothing is sent but the station numbers. The integration writes only its

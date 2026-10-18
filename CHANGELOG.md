@@ -55,5 +55,11 @@ the notes of the version's GitHub Release.
   layer without any unit is refused and the status says so.
 - A configuration Gladys does not give at start is asked again by a timer.
 - swisshydroapi: a stopped sensor and a temperature not in °C are left out.
+- A scene event Gladys refuses for good (a 4xx other than 429) is dropped at
+  once instead of blocking the events behind it.
+- The danger thresholds always come from the latest hydrodaten layer (only the
+  discharge units are kept from one layer to the next).
+- The docs warn that an old danger level may stay shown with swisshydroapi or
+  when LINDAS stops giving one.
 
 [Unreleased]: https://github.com/LM1LC3N7/gladys-swiss-hydro/commits/main

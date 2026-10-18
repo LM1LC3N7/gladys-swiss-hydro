@@ -103,6 +103,7 @@ alertes officielles.
   ne dit pas si une station est en m³/s ou en l/s) ; les autres valeurs
   continuent. Une station absente de la couche n'a pas de débit avec la
   source OFEV : choisissez pour elle swisshydroapi.
+- **Ne vous fiez pas à un ancien degré de danger.** Avec la source swisshydroapi, ou quand LINDAS ne donne plus de degré pour une station, plus rien de neuf n'est publié pour lui : Gladys continue d'afficher la dernière valeur reçue, qui peut être périmée. Vérifiez la date de la mesure et les alertes officielles.
 - Si Gladys ne donne pas la configuration au démarrage, l'intégration le dit
   dans son statut et redemande après 1 minute, puis 2, 4… jusqu'à 30.
 - Rien n'est envoyé hormis les numéros de stations. L'intégration n'écrit

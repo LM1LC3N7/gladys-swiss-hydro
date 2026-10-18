@@ -569,7 +569,7 @@ test('an older or aberrant reading keeps the previous one', async () => {
   assert.doesNotMatch(status(gladys).message.en, /without data/);
 });
 
-test('the thresholds layer: refused without any unit, merged without losing one', async () => {
+test('the thresholds layer: refused without any unit, merged without losing a unit', async () => {
   const { app, gladys, answers, clock, timers } = await setup({ start: false });
   answers.thresholds = () => json({ features: [{ properties: { key: '2135', metric: 'nope' } }] });
   await app.start({ stations: '2135' });
@@ -591,7 +591,11 @@ test('the thresholds layer: refused without any unit, merged without losing one'
   await timers.runIntervals();
   assert.equal(app.state.meta.failedAt, 0, 'accepted');
   assert.equal(app.state.meta.stations.get('2135').flowUnit, 'm3/s', 'kept');
-  assert.deepEqual(app.state.meta.stations.get('2135').thresholds, [360, 430, 500, 560]);
+  assert.equal(
+    app.state.meta.stations.get('2135').thresholds,
+    null,
+    'thresholds from the fresh layer only',
+  );
 });
 
 test('a configuration Gladys does not give: error status, retried by a timer, more and more spaced', async () => {
@@ -629,4 +633,32 @@ test('a configuration Gladys does not give: error status, retried by a timer, mo
   assert.equal(timers.timeouts().length, 1);
   app.stop();
   assert.equal(timers.timeouts().length, 0);
+});
+
+test('a scene event Gladys refuses for good is dropped at once, the queue goes on', async () => {
+  const { app, gladys, timers, clock, answers } = await setup({ start: false });
+  await app.start({ stations: '2135' });
+  let refused = 0;
+  const original = gladys.publishSceneEvent.bind(gladys);
+  gladys.publishSceneEvent = async (key, data) => {
+    if (data.threshold === '100') {
+      refused += 1;
+      const err = new Error('bad payload');
+      err.status = 400;
+      throw err;
+    }
+    return original(key, data);
+  };
+  answers.values = () =>
+    lindas([{ id: '2135', time: foenTime(clock.now - 60_000), discharge: 160, danger: 1 }]);
+  await runMinutes(timers, clock, 10);
+  assert.equal(refused, 1, 'tried once, never again');
+  assert.deepEqual(
+    gladys.fake.sceneEvents.map((e) => e.data.threshold),
+    ['150'],
+    'the next one was not blocked',
+  );
+  assert.equal(app.state.pendingEvents.length, 0);
+  await runMinutes(timers, clock, 1);
+  assert.equal(refused, 1);
 });

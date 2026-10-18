@@ -542,6 +542,15 @@ export class HydroApp {
       try {
         await this.gladys.publishSceneEvent(event.key, event.data);
       } catch (err) {
+        const status = Number(err?.status);
+        if (status >= 400 && status < 500 && status !== 429) {
+          // Refused for good (the payload, the declaration): retrying would
+          // only block the events behind it.
+          this.logger.warn(`Scene event ${event.key} refused (http ${status}), dropped`);
+          this.state.pendingEvents.shift();
+          changed = true;
+          continue;
+        }
         this.logger.warn(`Scene event ${event.key} not sent, kept for later: ${err.message}`);
         break;
       }
