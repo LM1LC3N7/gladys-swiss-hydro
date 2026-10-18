@@ -21,8 +21,8 @@
         "fr": "Rivières et lacs suisses dans Gladys"
       },
       "description": {
-        "en": "Unofficial connector, not affiliated with the Swiss Federal Office for the Environment (FOEN). For each station you choose (Aare, Rhône, Lake Geneva...), it brings into Gladys the flow, the water level, the water temperature, the date of the measurement, the official flood danger level and its thresholds. Public open data, no account. Source: FOEN. The FOEN measures every 10 minutes: the stations are read every 10 minutes at most. Never tested against the real service by a Gladys installation yet.",
-        "fr": "Connecteur non officiel, sans lien avec l'Office fédéral de l'environnement (OFEV). Pour chaque station choisie (Aar, Rhône, Léman…), il amène dans Gladys le débit, le niveau, la température de l'eau, la date de la mesure, le degré officiel de danger de crue et ses seuils. Données ouvertes publiques, sans compte. Source : OFEV. L'OFEV mesure toutes les 10 minutes : les stations sont lues toutes les 10 minutes au plus. Jamais testé contre le vrai service par une installation Gladys pour l'instant."
+        "en": "Not an official warning system, nor the FOEN regional warning: follow the official warnings of the FOEN and of your canton. Unofficial connector, not affiliated with the Swiss Federal Office for the Environment (FOEN). For each station you choose (Aare, Rhône, Lake Geneva...), it brings into Gladys the flow, the water level, the water temperature, the date of the measurement, the official flood danger level (FOEN source) and the thresholds of the hydrodaten map. Public open data, no account. Source: FOEN. The FOEN measures every 10 minutes: the stations are read every 10 minutes at most. Never tested against the real service by a Gladys installation yet.",
+        "fr": "Pas un système d'alerte officiel, ni l'alerte régionale de l'OFEV : suivez les alertes officielles de l'OFEV et de votre canton. Connecteur non officiel, sans lien avec l'Office fédéral de l'environnement (OFEV). Pour chaque station choisie (Aar, Rhône, Léman…), il amène dans Gladys le débit, le niveau, la température de l'eau, la date de la mesure, le degré officiel de danger de crue (source OFEV) et les seuils de la carte hydrodaten. Données ouvertes publiques, sans compte. Source : OFEV. L'OFEV mesure toutes les 10 minutes : les stations sont lues toutes les 10 minutes au plus. Jamais testé contre le vrai service par une installation Gladys pour l'instant."
       },
       "links": [
         {
@@ -56,8 +56,8 @@
       "type": "select",
       "label": { "en": "Data source", "fr": "Source des données" },
       "description": {
-        "en": "FOEN open data (LINDAS): the official values and danger level. swisshydroapi: the service the swisshydrodata library reads, run by its author; the danger level is then computed from the official thresholds.",
-        "fr": "Données ouvertes OFEV (LINDAS) : les valeurs et le degré de danger officiels. swisshydroapi : le service que lit la bibliothèque swisshydrodata, tenu par son auteur ; le degré de danger est alors calculé à partir des seuils officiels."
+        "en": "FOEN open data (LINDAS): the official values and danger level. swisshydroapi: the service the swisshydrodata library reads, run by its author; it has no danger level, so none is published with it.",
+        "fr": "Données ouvertes OFEV (LINDAS) : les valeurs et le degré de danger officiels. swisshydroapi : le service que lit la bibliothèque swisshydrodata, tenu par son auteur ; il n'a pas de degré de danger, aucun n'est donc publié avec lui."
       },
       "required": false,
       "default": "foen",
@@ -194,8 +194,8 @@
         "fr": "Degré de danger de crue atteint (Swiss Hydro)"
       },
       "description": {
-        "en": "The official FOEN flood danger level of a station rose to the chosen level (1: no or low danger, 5: very high danger). Fires again after the level went down and up again.",
-        "fr": "Le degré officiel de danger de crue de l'OFEV d'une station est monté au degré choisi (1 : danger nul ou faible, 5 : danger très fort). Se déclenche à nouveau après une baisse puis une hausse."
+        "en": "The official FOEN flood danger level of a station (FOEN source only) rose to the chosen level (1: no or low danger, 5: very high danger). Fires again only after the level stayed under it for 30 minutes. Not an official warning.",
+        "fr": "Le degré officiel de danger de crue de l'OFEV d'une station (source OFEV seulement) est monté au degré choisi (1 : danger nul ou faible, 5 : danger très fort). Se déclenche à nouveau seulement après 30 minutes en dessous. Pas une alerte officielle."
       },
       "fields": [
         {

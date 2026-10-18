@@ -149,7 +149,10 @@ test('a start reads the thresholds, then the values: devices, states, status', a
   assert.equal(gladys.fake.lastState(`${BERN}:temperature`), 15.12);
   assert.equal(gladys.fake.lastState(`${BERN}:danger-level`), 1);
   assert.equal(gladys.fake.lastState(`${BERN}:danger-threshold-4`), 500);
-  assert.equal(gladys.fake.lastState(`${BERN}:measured-at`), '2026-10-18 05:30');
+  assert.equal(gladys.fake.lastState(`${BERN}:measured-at`), '2026-10-18 05:30 CEST');
+  // 520: LINDAS says Undefined: no danger level feature, nothing published.
+  assert.equal(gladys.fake.lastState('ext:swiss-hydro:station:520:danger-level'), undefined);
+  assert.ok(!toss.includes('danger-level'));
 });
 
 test('never faster than the interval: ticks, reconnections, restarts', async () => {
@@ -371,15 +374,15 @@ test('the test button reads at most once a minute and shows every station', asyn
   const en = msg(ack, 'en');
   assert.match(
     en,
-    /- 2135 Aare - Bern, Schönau: 57\.8 m³\/s, 501\.71 m, 15\.1 °C, danger level 1\/5/,
+    /- 2135 Aare - Bern, Schönau: 57\.8 m³\/s, 501\.71 m, 15\.1 °C, official danger level 1\/5/,
   );
-  assert.match(en, /thresholds of levels 2 to 5: 360 \/ 430 \/ 500 \/ 560 m³\/s/);
-  assert.match(en, /measured 2026-10-18 05:30 \(Swiss time\)/);
+  assert.match(en, /hydrodaten map thresholds wl_1 to wl_4: 360 \/ 430 \/ 500 \/ 560 m³\/s/);
+  assert.match(en, /measured 2026-10-18 05:30 CEST \(Swiss time\)/);
   assert.match(en, /- 520 Töss - Rämismühle: flow: unit unknown/);
   clock.now += 61_000;
   const again = await gladys.fake.action(ACTIONS.TEST);
   assert.equal(valueCalls().length, 2);
-  assert.match(msg(again, 'fr'), /mesure du 2026-10-18 05:30 \(heure suisse\)/);
+  assert.match(msg(again, 'fr'), /mesure du 2026-10-18 05:30 CEST \(heure suisse\)/);
 });
 
 test('an old measurement is shown but never published', async () => {
@@ -410,8 +413,11 @@ test('swisshydroapi: one call per station, a 404 is a missing station', async ()
   assert.match(status(gladys).message.en, /1 station\(s\) without data/);
   await createAll(gladys);
   assert.equal(gladys.fake.lastState('ext:swiss-hydro:station:2206:flow'), 0.015);
-  // The danger level comes from the official thresholds.
-  assert.equal(gladys.fake.lastState(`${BERN}:danger-level`), 1);
+  // swisshydroapi has no danger level: none published, no feature.
+  assert.equal(gladys.fake.lastState(`${BERN}:danger-level`), undefined);
+  for (const device of gladys.fake.discoveredDevices) {
+    assert.ok(!device.features.some((f) => f.external_id.endsWith(':danger-level')));
+  }
 });
 
 test('a 429 of swisshydroapi stops the round, the stations read so far are kept', async () => {
@@ -424,4 +430,203 @@ test('a 429 of swisshydroapi stops the round, the stations read so far are kept'
   assert.ok(app.state.pauses.has(HOSTS.SWISSHYDROAPI));
   assert.equal(status(gladys).connected, true);
   assert.match(status(gladys).message.en, /paused until/);
+});
+
+// --- Review round 1 -----------------------------------------------------------------
+
+/** A swisshydroapi answer for one station at `ms`. */
+const swissAt = (ms, flow) =>
+  json({
+    name: 'Bern, Schönau',
+    'water-body-name': 'Aare',
+    'water-body-type': 'river',
+    parameters: {
+      discharge: { unit: 'm3/s', datetime: foenTime(ms), value: flow },
+      level: { unit: 'm', datetime: foenTime(ms), value: 503 },
+    },
+  });
+
+test('swisshydroapi: a flood fires the flow marks, never a danger level', async () => {
+  const { app, gladys, timers, clock, answers } = await setup({ start: false });
+  await app.start({ stations: '2135', source: 'swisshydroapi' });
+  answers.swiss = () => swissAt(clock.now - 60_000, 900);
+  await runMinutes(timers, clock, 10);
+  const keys = new Set(gladys.fake.sceneEvents.map((e) => e.key));
+  assert.ok(keys.has(SCENE_TRIGGERS.FLOW_ABOVE));
+  assert.ok(!keys.has(SCENE_TRIGGERS.DANGER_REACHED));
+});
+
+test('restart loops: a station without data, then a 503, read once per interval at most', async () => {
+  const storage = memoryStorage();
+  const config = { stations: '2135, 7777' };
+  let s = await setup({ storage, config });
+  let total = valueCalls().length;
+  assert.equal(total, 1);
+  assert.match(status(s.gladys).message.en, /1 station\(s\) without data/);
+  for (let k = 0; k < 8; k += 1) {
+    s.app.stop();
+    s = await setup({ storage, config, now: s.clock.now + 60_000 });
+    total += valueCalls().length;
+  }
+  assert.equal(total, 1, '8 restarts in 8 minutes: no new read');
+  s.app.stop();
+  s = await setup({ storage, config, now: s.clock.now + 2 * 60_000 });
+  total += valueCalls().length;
+  assert.equal(total, 2, 'read again once the interval passed');
+  // A 503, then restarts with a station added: still the interval.
+  s.answers.values = () => json({}, 503);
+  await runMinutes(s.timers, s.clock, 10);
+  total += valueCalls().length - 1;
+  assert.equal(total, 3);
+  const more = { stations: '2135, 7777, 2009' };
+  for (let k = 0; k < 9; k += 1) {
+    s.app.stop();
+    s = await setup({ storage, config: more, now: s.clock.now + 60_000 });
+    total += valueCalls().length;
+  }
+  assert.equal(total, 3, 'after a failure, a new station waits the interval too');
+  s.app.stop();
+  await setup({ storage, config: more, now: s.clock.now + 60_000 });
+  total += valueCalls().length;
+  assert.equal(total, 4);
+});
+
+test('swisshydroapi: a failing station is noted and the round goes on; 3 network failures stop it', async () => {
+  const { app, gladys, answers } = await setup({ start: false });
+  const down = () => {
+    throw new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } });
+  };
+  answers.swiss = (id) =>
+    id === '2135'
+      ? down()
+      : id === '2206'
+        ? json(fixture('swisshydroapi-2206.json'))
+        : json({}, 404);
+  await app.start({ stations: '2135, 2206, 2009', source: 'swisshydroapi' });
+  assert.equal(calls(/bouni\.de\/api\/v1\/station\//).length, 3, 'the round went on');
+  assert.equal(gladys.fake.discoveredDevices.length, 1);
+  assert.equal(status(gladys).connected, true);
+  assert.match(status(gladys).message.en, /1 station\(s\) not read this time \(network error\)/);
+  const ack = await gladys.fake.action(ACTIONS.TEST);
+  assert.match(msg(ack, 'en'), /- 2135: network error/);
+  // The host is down: the round stops after three failures in a row.
+  const second = await setup({ start: false });
+  second.answers.swiss = down;
+  await second.app.start({ stations: '2135, 2206, 2009, 2043, 2044', source: 'swisshydroapi' });
+  assert.equal(calls(/bouni\.de\/api\/v1\/station\//).length, 3);
+  assert.equal(second.app.lastError.kind, 'network');
+  assert.equal(status(second.gladys).connected, false);
+});
+
+test('scene events Gladys refuses are queued, persisted, replayed, and dropped after 30 minutes', async () => {
+  const storage = memoryStorage();
+  const { app, gladys, timers, clock, answers } = await setup({ storage, start: false });
+  await app.start({ stations: '2135' });
+  gladys.publishSceneEvent = async () => {
+    throw new Error('Gladys restarting');
+  };
+  answers.values = () =>
+    lindas([{ id: '2135', time: foenTime(clock.now - 60_000), discharge: 160, danger: 1 }]);
+  await runMinutes(timers, clock, 10);
+  assert.equal(gladys.fake.sceneEvents.length, 0);
+  assert.equal(app.state.pendingEvents.length, 2, '100 and 150');
+  assert.equal(storage.load().pendingEvents.length, 2, 'persisted');
+  // Gladys is back: the next tick sends them, in order, once.
+  delete gladys.publishSceneEvent;
+  await runMinutes(timers, clock, 1);
+  assert.deepEqual(
+    gladys.fake.sceneEvents.map((e) => e.data.threshold),
+    ['100', '150'],
+  );
+  assert.equal(app.state.pendingEvents.length, 0);
+  // Refused for more than 30 minutes: dropped, never sent late.
+  gladys.publishSceneEvent = async () => {
+    throw new Error('Gladys down');
+  };
+  answers.values = () =>
+    lindas([{ id: '2135', time: foenTime(clock.now - 60_000), discharge: 210, danger: 1 }]);
+  await runMinutes(timers, clock, 10);
+  assert.equal(app.state.pendingEvents.length, 1);
+  await runMinutes(timers, clock, 31);
+  delete gladys.publishSceneEvent;
+  await runMinutes(timers, clock, 1);
+  assert.equal(gladys.fake.sceneEvents.length, 2, 'the late one was dropped');
+  assert.equal(app.state.pendingEvents.length, 0);
+});
+
+test('an older or aberrant reading keeps the previous one', async () => {
+  const { app, gladys, timers, clock, answers } = await setup({ start: false });
+  await app.start({ stations: '2135' });
+  answers.values = () =>
+    lindas([{ id: '2135', time: foenTime(FIXTURE_NOW - 2 * 3600_000), discharge: 99, level: 500 }]);
+  await runMinutes(timers, clock, 10);
+  assert.equal(app.state.readings.get('2135').flow, 57.783);
+  answers.values = () =>
+    lindas([{ id: '2135', time: '2025-01-01T00:00:00+01:00', discharge: 99, level: 500 }]);
+  await runMinutes(timers, clock, 10);
+  assert.equal(app.state.readings.get('2135').flow, 57.783);
+  assert.ok(!app.missing.has('2135'), 'still counted as read');
+  assert.doesNotMatch(status(gladys).message.en, /without data/);
+});
+
+test('the thresholds layer: refused without any unit, merged without losing one', async () => {
+  const { app, gladys, answers, clock, timers } = await setup({ start: false });
+  answers.thresholds = () => json({ features: [{ properties: { key: '2135', metric: 'nope' } }] });
+  await app.start({ stations: '2135' });
+  assert.ok(app.state.meta.failedAt > 0, 'refused');
+  assert.match(
+    status(gladys).message.en,
+    /thresholds layer of hydrodaten\.admin\.ch is unavailable: no flow/,
+  );
+  assert.match(status(gladys).message.fr, /pas de débit ni de seuils avec la source OFEV/);
+  // A good layer, then a day later one without Bern: its unit stays.
+  answers.thresholds = () => json(fixture('thresholds.geojson'));
+  clock.now += 3600_000;
+  await timers.runIntervals();
+  assert.equal(app.state.meta.stations.get('2135').flowUnit, 'm3/s');
+  const partial = fixture('thresholds.geojson');
+  partial.features = partial.features.filter((f) => f.properties.key !== '2135');
+  answers.thresholds = () => json(partial);
+  clock.now += 24 * 3600_000 + 60_000;
+  await timers.runIntervals();
+  assert.equal(app.state.meta.failedAt, 0, 'accepted');
+  assert.equal(app.state.meta.stations.get('2135').flowUnit, 'm3/s', 'kept');
+  assert.deepEqual(app.state.meta.stations.get('2135').thresholds, [360, 430, 500, 560]);
+});
+
+test('a configuration Gladys does not give: error status, retried by a timer, more and more spaced', async () => {
+  const { app, gladys, timers, clock } = await setup({ start: false });
+  let failures = 2;
+  const load = async () => {
+    if (failures > 0) {
+      failures -= 1;
+      throw new Error('timeout');
+    }
+    return { stations: '2135' };
+  };
+  await app.connect(load);
+  assert.equal(status(gladys).connected, false);
+  assert.match(status(gladys).message.en, /configuration could not be read from Gladys/);
+  assert.deepEqual(
+    timers.timeouts().map((t) => t.ms),
+    [60_000],
+  );
+  clock.now += 60_000;
+  await timers.runTimeouts();
+  assert.deepEqual(
+    timers.timeouts().map((t) => t.ms),
+    [120_000],
+  );
+  assert.equal(valueCalls().length, 0);
+  clock.now += 120_000;
+  await timers.runTimeouts();
+  assert.equal(timers.timeouts().length, 0);
+  assert.equal(valueCalls().length, 1);
+  assert.equal(status(gladys).connected, true);
+  // A disconnection cancels a pending retry.
+  failures = 1;
+  await app.connect(load);
+  assert.equal(timers.timeouts().length, 1);
+  app.stop();
+  assert.equal(timers.timeouts().length, 0);
 });

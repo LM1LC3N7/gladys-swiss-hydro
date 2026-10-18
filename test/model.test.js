@@ -9,11 +9,11 @@ import { normalizeConfig, parseStations, stationId } from '../src/config.js';
 import { FEATURES } from '../src/constants.js';
 import {
   believable,
-  dangerFrom,
   deviceOf,
   foenReading,
   isFresh,
   labelOf,
+  mergeThresholds,
   num,
   parseLindasObservations,
   parseLindasStations,
@@ -171,15 +171,15 @@ test('the measurement date in Swiss time, whatever the time zone of the containe
     // The zone really changed for this process (else the test proves nothing).
     offsets.add(new Date(NOW).getTimezoneOffset());
     // Around midnight: 00:30 in Bern is still the previous day in Lisbon.
-    assert.equal(swissTime(Date.parse('2026-10-17T22:30:00Z')), '2026-10-18 00:30', zone);
-    assert.equal(swissTime(Date.parse('2026-10-17T21:59:00Z')), '2026-10-17 23:59', zone);
-    // The end of summer time (2026-10-25): 02:30 twice.
-    assert.equal(swissTime(Date.parse('2026-10-25T00:30:00Z')), '2026-10-25 02:30', zone);
-    assert.equal(swissTime(Date.parse('2026-10-25T01:30:00Z')), '2026-10-25 02:30', zone);
+    assert.equal(swissTime(Date.parse('2026-10-17T22:30:00Z')), '2026-10-18 00:30 CEST', zone);
+    assert.equal(swissTime(Date.parse('2026-10-17T21:59:00Z')), '2026-10-17 23:59 CEST', zone);
+    // The end of summer time (2026-10-25): 02:30 twice, told apart by the zone.
+    assert.equal(swissTime(Date.parse('2026-10-25T00:30:00Z')), '2026-10-25 02:30 CEST', zone);
+    assert.equal(swissTime(Date.parse('2026-10-25T01:30:00Z')), '2026-10-25 02:30 CET', zone);
     // The start of summer time (2026-03-29): 02:xx does not exist.
-    assert.equal(swissTime(Date.parse('2026-03-29T01:30:00Z')), '2026-03-29 03:30', zone);
+    assert.equal(swissTime(Date.parse('2026-03-29T01:30:00Z')), '2026-03-29 03:30 CEST', zone);
     // The FOEN writes its winter time all year: the instant is what counts.
-    assert.equal(swissTime(parseTime('2026-10-18T04:30:00+01:00')), '2026-10-18 05:30', zone);
+    assert.equal(swissTime(parseTime('2026-10-18T04:30:00+01:00')), '2026-10-18 05:30 CEST', zone);
     // Freshness does not depend on the zone either.
     assert.ok(isFresh({ time: parseTime('2026-10-18T04:30:00+01:00') }, NOW), zone);
   }
@@ -231,7 +231,8 @@ test('thresholds: units, lakes, l/s brooks, missing or broken thresholds', () =>
   });
   assert.equal(broken.get('1').thresholds, null, 'not increasing');
   assert.equal(broken.get('2').thresholds, null, 'another unit');
-  assert.deepEqual(quantity('724.10 m ü.M.'), { value: 724.1, unit: 'm' });
+  assert.deepEqual(quantity('724.10 m ü.M.'), { value: 724.1, unit: 'masl' });
+  assert.deepEqual(quantity('2.5 m'), { value: 2.5, unit: 'm' }, 'a height is not an altitude');
   assert.equal(quantity('12 furlongs'), null);
 });
 
@@ -248,38 +249,44 @@ test('the discharge unit of LINDAS comes from the thresholds layer', () => {
   assert.equal(unknown.level, 523.718);
 });
 
-test('the danger level computed from the thresholds (swisshydroapi)', () => {
-  const meta = { metric: 'flow', thresholds: [360, 430, 500, 560] };
-  assert.equal(dangerFrom({ flow: 58 }, meta), 1);
-  assert.equal(dangerFrom({ flow: 360 }, meta), 2);
-  assert.equal(dangerFrom({ flow: 520 }, meta), 4);
-  assert.equal(dangerFrom({ flow: 9000 }, meta), 5);
-  assert.equal(dangerFrom({ flow: null }, meta), null);
-  assert.equal(dangerFrom({ flow: 58 }, { metric: 'flow', thresholds: null }), null);
-  assert.equal(
-    dangerFrom({ level: 724.5 }, { metric: 'level', thresholds: [724.1, 724.45, 725, 725.25] }),
-    3,
-  );
+test('the thresholds layer merged: a known unit or threshold is never lost', () => {
+  const known = new Map([
+    ['2135', { kind: 'river', metric: 'flow', flowUnit: 'm3/s', thresholds: [360, 430, 500, 560] }],
+    ['2206', { kind: 'river', metric: 'flow', flowUnit: 'l/s', thresholds: null }],
+  ]);
+  const fresh = new Map([
+    ['2135', { kind: 'river', metric: null, flowUnit: null, thresholds: null }],
+    [
+      '2009',
+      { kind: 'river', metric: 'flow', flowUnit: 'm3/s', thresholds: [700, 1000, 1200, 1400] },
+    ],
+  ]);
+  const merged = mergeThresholds(known, fresh);
+  assert.deepEqual(merged.get('2135'), known.get('2135'), 'nothing replaced by null');
+  assert.equal(merged.get('2206').flowUnit, 'l/s', 'missing from the new layer: kept');
+  assert.equal(merged.get('2009').flowUnit, 'm3/s');
 });
 
-test('swisshydroapi: one station, its units and its dates', () => {
+test('swisshydroapi: one station, its units and its dates, never a danger level', () => {
   const meta = parseThresholds(fixture('thresholds.geojson'));
   const bern = swissReading('2135', fixture('swisshydroapi-2135.json'), meta.get('2135'), NOW);
   assert.equal(bern.flow, 57.783);
   assert.equal(bern.level, 501.712);
   assert.equal(bern.temperature, 15.12);
-  assert.equal(bern.danger, 1);
+  assert.equal(bern.danger, null, 'never computed from the thresholds');
+  assert.ok(!valuesOf(bern, meta.get('2135')).has(FEATURES.DANGER));
   assert.equal(bern.time, Date.parse('2026-10-18T03:30:00Z'));
   assert.equal(labelOf(bern), 'Aare - Bern, Schönau');
   const melera = swissReading('2206', fixture('swisshydroapi-2206.json'), meta.get('2206'), NOW);
   assert.equal(melera.flow, 0.015, 'l/s converted');
   assert.equal(melera.temperature, null);
-  assert.equal(melera.danger, 1);
+  assert.equal(melera.danger, null);
   const odd = swissReading(
     '1',
     {
       parameters: {
         discharge: { unit: 'gal/min', value: 3, datetime: '2026-10-18T04:30:00+01:00' },
+        temperature: { unit: '°F', value: 50, datetime: '2026-10-18T04:30:00+01:00' },
       },
     },
     null,
@@ -287,6 +294,7 @@ test('swisshydroapi: one station, its units and its dates', () => {
   );
   assert.equal(odd.flow, null);
   assert.equal(odd.flowUnit, 'unknown');
+  assert.equal(odd.temperature, null, '°C only');
   const old = swissReading(
     '1',
     { parameters: { level: { unit: 'm', value: 400, datetime: '2025-01-01T00:00:00+01:00' } } },
@@ -295,6 +303,21 @@ test('swisshydroapi: one station, its units and its dates', () => {
   );
   assert.equal(old.aberrant, true);
   assert.ok(!isFresh(old, NOW));
+  // A sensor stopped while the others go on: its last value is left out.
+  const mixed = swissReading(
+    '1',
+    {
+      parameters: {
+        level: { unit: 'm', value: 400, datetime: '2026-10-18T04:30:00+01:00' },
+        temperature: { unit: '°C', value: 9, datetime: '2026-10-17T04:30:00+01:00' },
+      },
+    },
+    null,
+    NOW,
+  );
+  assert.equal(mixed.level, 400);
+  assert.equal(mixed.temperature, null);
+  assert.ok(isFresh(mixed, NOW));
 });
 
 test('the station lists and the search', () => {
@@ -359,7 +382,7 @@ test('devices and states: the features of the values present, plain units', () =
     device_feature_external_id: `${device.external_id}:flow`,
     state: 57.783,
   });
-  assert.equal(states['measured-at'].text, '2026-10-18 05:30');
+  assert.equal(states['measured-at'].text, '2026-10-18 05:30 CEST');
   assert.equal(states['danger-level'].state, 1);
   assert.equal(states['danger-threshold-5'].state, 560);
   // A lake: no flow, its thresholds in m.

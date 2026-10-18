@@ -7,16 +7,28 @@
 // fell back under 95 % of it, so a flow wavering around the mark does not
 // fire at every reading. Several marks crossed at once fire each.
 //
-// "Danger level reached": the FOEN flood danger level rose to a level (2 to
-// 5); a jump from 1 to 3 fires level 2 and level 3. It fires again after the
-// level went down and up again.
+// "Danger level reached": the official FOEN flood danger level (LINDAS only)
+// rose to a level (2 to 5); a jump from 1 to 3 fires level 2 and level 3. A
+// level fired is re-armed only once the danger level stayed under it for 30
+// minutes, so a level wavering between 2 and 3 fires 3 once.
 //
-// The first reading of a station only arms (nothing fires on a start), and
-// so does the first known danger level after a gap (unknown -> 3 is not a
-// rise anyone saw).
+// Nothing fires, the state is only armed from the reading:
+//   - on the first reading of a station;
+//   - when the previous reading of the state is older than STALE_AFTER (a
+//     gap: nobody saw the rise);
+//   - when the source or the discharge unit of the station changed (the
+//     values are not comparable);
+//   - for the danger level, when it was unknown just before (unknown -> 3).
 // -----------------------------------------------------------------------------
 
-import { FLOW_REARM, FLOW_THRESHOLDS, SCENE_TRIGGERS } from './constants.js';
+import {
+  DANGER_LEVELS,
+  DANGER_REARM,
+  FLOW_REARM,
+  FLOW_THRESHOLDS,
+  SCENE_TRIGGERS,
+  STALE_AFTER,
+} from './constants.js';
 import { labelOf, swissTime } from './model.js';
 
 const fmt = (value, lang) => {
@@ -24,23 +36,48 @@ const fmt = (value, lang) => {
   return lang === 'fr' ? text.replace('.', ',') : text;
 };
 
+const FIRING_LEVELS = DANGER_LEVELS.filter((l) => l >= 2);
+
 /** A fresh trigger state. */
-export const newTriggerState = () => ({ armed: new Set(), danger: null, started: false });
+export const newTriggerState = () => ({
+  armed: new Set(),
+  danger: null,
+  fired: new Set(),
+  below: new Map(),
+  started: false,
+  lastAt: 0,
+  source: null,
+  unit: null,
+});
 
 /**
  * The events of a station for a new (fresh) reading, and its next state.
  *   previous  the state returned last time (newTriggerState() the first time)
  *   device    the external id of the station device (the trigger filter)
+ *   source    the data source of the reading
  */
-export function stationEvents(previous, reading, device) {
+export function stationEvents(previous, reading, device, source = null) {
+  const time = Number.isFinite(reading.time) ? reading.time : 0;
+  const unit = reading.flowUnit ?? null;
+  const reset =
+    !previous.started ||
+    (previous.lastAt > 0 && time - previous.lastAt > STALE_AFTER) ||
+    (previous.source !== null && previous.source !== source) ||
+    (previous.unit !== null && unit !== null && previous.unit !== unit);
+  const base = reset ? newTriggerState() : previous;
   const state = {
-    armed: new Set(previous.armed),
-    danger: previous.danger,
-    started: previous.started,
+    armed: new Set(base.armed),
+    danger: base.danger,
+    fired: new Set(base.fired),
+    below: new Map(base.below),
+    started: base.started,
+    lastAt: time,
+    source,
+    unit: unit ?? base.unit,
   };
   const events = [];
   const name = labelOf(reading);
-  const measuredAt = Number.isFinite(reading.time) ? swissTime(reading.time) : null;
+  const measuredAt = time ? swissTime(time) : null;
   const flow = reading.flow ?? null;
 
   if (flow !== null) {
@@ -72,24 +109,41 @@ export function stationEvents(previous, reading, device) {
 
   const danger = reading.danger ?? null;
   if (danger !== null) {
-    if (state.started && state.danger !== null && danger > state.danger) {
-      for (let level = Math.max(2, state.danger + 1); level <= danger; level += 1) {
-        events.push({
-          key: SCENE_TRIGGERS.DANGER_REACHED,
-          data: {
-            device,
-            level: String(level),
-            station: reading.id,
-            station_name: name,
-            danger_level: danger,
-            previous_level: state.danger,
-            flow,
-            water_level: reading.level ?? null,
-            measured_at: measuredAt,
-            summary: `${name}: flood danger level ${danger} of 5 (was ${state.danger})`,
-            summary_fr: `${name} : danger de crue de degré ${danger} sur 5 (avant : ${state.danger})`,
-          },
-        });
+    if (!state.started || state.danger === null) {
+      // Arm only: the levels already reached count as fired.
+      state.fired = new Set(FIRING_LEVELS.filter((l) => l <= danger));
+      state.below = new Map();
+    } else {
+      for (const level of FIRING_LEVELS) {
+        if (danger >= level) {
+          state.below.delete(level);
+          if (!state.fired.has(level)) {
+            state.fired.add(level);
+            events.push({
+              key: SCENE_TRIGGERS.DANGER_REACHED,
+              data: {
+                device,
+                level: String(level),
+                station: reading.id,
+                station_name: name,
+                danger_level: danger,
+                previous_level: state.danger,
+                flow,
+                water_level: reading.level ?? null,
+                measured_at: measuredAt,
+                summary: `${name}: flood danger level ${danger} of 5 (was ${state.danger})`,
+                summary_fr: `${name} : danger de crue de degré ${danger} sur 5 (avant : ${state.danger})`,
+              },
+            });
+          }
+        } else if (state.fired.has(level)) {
+          const since = state.below.get(level) ?? time;
+          state.below.set(level, since);
+          if (time - since >= DANGER_REARM) {
+            state.fired.delete(level);
+            state.below.delete(level);
+          }
+        }
       }
     }
     state.danger = danger;

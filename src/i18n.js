@@ -3,7 +3,10 @@
 // English and French.
 // -----------------------------------------------------------------------------
 
-const clockUtc = (ms) => `${new Date(ms).toISOString().slice(11, 16)} UTC`;
+import { swissTime } from './model.js';
+
+/** An instant as the user reads it: Swiss time, with CET or CEST. */
+const clock = (ms) => swissTime(ms);
 
 export const SOURCE_NAMES = {
   foen: { en: 'FOEN open data (LINDAS)', fr: 'données ouvertes OFEV (LINDAS)' },
@@ -36,8 +39,8 @@ export const T = {
     fr: 'Aucune station choisie : saisissez des numéros (ou des noms) de stations dans la configuration. Le bouton « Chercher des stations » les trouve.',
   },
   paused: (until) => ({
-    en: `The data service asked to slow down: paused until ${clockUtc(until)}.`,
-    fr: `Le service de données a demandé de ralentir : en pause jusqu'à ${clockUtc(until)}.`,
+    en: `The data service asked to slow down: paused until ${clock(until)}.`,
+    fr: `Le service de données a demandé de ralentir : en pause jusqu'à ${clock(until)}.`,
   }),
   ok: ({ stations, interval, source, fresh }) => ({
     en: `${stations} station(s), ${fresh} with a current value, read every ${interval} min from the ${source.en}.`,
@@ -58,6 +61,22 @@ export const T = {
   tooMany: (max) => ({
     en: `Only the first ${max} stations are read.`,
     fr: `Seules les ${max} premières stations sont lues.`,
+  }),
+  someFailed: (n, r) => ({
+    en: `${n} station(s) not read this time (${r.en}).`,
+    fr: `${n} station(s) non lue(s) cette fois (${r.fr}).`,
+  }),
+  thresholdsMissing: {
+    en: 'The thresholds layer of hydrodaten.admin.ch is unavailable: no flow and no thresholds with the FOEN source until it answers.',
+    fr: "La couche des seuils d'hydrodaten.admin.ch est indisponible : pas de débit ni de seuils avec la source OFEV tant qu'elle ne répond pas.",
+  },
+  thresholdsStale: {
+    en: 'The thresholds layer of hydrodaten.admin.ch is unavailable: the last known units and thresholds are used.',
+    fr: "La couche des seuils d'hydrodaten.admin.ch est indisponible : les dernières unités et les derniers seuils connus sont utilisés.",
+  },
+  configFailed: (at) => ({
+    en: `The configuration could not be read from Gladys: new try at ${clock(at)}.`,
+    fr: `La configuration n'a pas pu être lue depuis Gladys : nouvel essai à ${clock(at)}.`,
   }),
   unknownUnit: (n) => ({
     en: `${n} station(s) without the unit of their discharge yet: flow not published.`,

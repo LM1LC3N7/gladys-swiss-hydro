@@ -6,20 +6,26 @@
 //
 // Pacing: one read of the values per interval (10 minutes at least, the
 // FOEN measures every 10 minutes), whatever happens: a failure, a 429, a
-// restart of the container (the instant of the last read is persisted) or a
-// reconnection to Gladys never makes it read sooner. The thresholds layer is
-// read once a day, the station list (search by name) once a week; when they
-// fail, the values go on without them.
+// restart of the container (the instant, the outcome, the source and the
+// stations of the last read are persisted) or a reconnection to Gladys never
+// makes it read sooner. The thresholds layer is read once a day, the station
+// list (search by name) once a week; when they fail, the values go on
+// without them.
 // -----------------------------------------------------------------------------
 
 import { createLogger } from '@gladysassistant/integration-sdk';
 import { HydroClient, HydroError } from './client.js';
-import { normalizeConfig } from './config.js';
+import { normalizeConfig, searchable } from './config.js';
 import {
+  CONFIG_RETRY_MAX,
+  CONFIG_RETRY_MIN,
+  EVENT_QUEUE_TTL,
   HEARTBEAT,
   HOSTS,
   LIST_RETRY,
   LIST_TTL,
+  MAX_NETWORK_FAILURES,
+  MAX_PENDING_EVENTS,
   MAX_STATIONS,
   MIN_READ_GAP,
   SOURCES,
@@ -36,6 +42,7 @@ import {
   idsOf,
   isFresh,
   labelOf,
+  mergeThresholds,
   parseLindasObservations,
   parseLindasStations,
   parseSwissStations,
@@ -46,7 +53,6 @@ import {
   swissTime,
   valuesOf,
 } from './model.js';
-import { searchable } from './config.js';
 import { emptyState, loadState, memoryStorage, saveState } from './store.js';
 import { newTriggerState, stationEvents } from './triggers.js';
 
@@ -94,6 +100,8 @@ export class HydroApp {
     this.unresolved = [];
     this.dropped = 0;
     this.missing = new Set();
+    /** id -> HydroError kind, the stations of the last round that failed alone. */
+    this.stationErrors = new Map();
     this.lastError = undefined;
     this.nextRead = 0;
     this.interval = undefined;
@@ -101,7 +109,8 @@ export class HydroApp {
     this.lastDiscovered = undefined;
     this.lastStatus = undefined;
     this.generation = 0;
-    this.started = false;
+    this.retryTimer = undefined;
+    this.retryDelay = 0;
   }
 
   save() {
@@ -112,21 +121,59 @@ export class HydroApp {
     }
   }
 
+  intervalMs() {
+    return this.config.pollMinutes * 60_000;
+  }
+
   // --- Lifecycle -------------------------------------------------------------
+
+  /**
+   * A (re)connection to Gladys: read the configuration, then start. When
+   * Gladys does not give it, an error status, and a new try after 1 minute,
+   * then 2, 4... up to 30 minutes (never a dead integration).
+   */
+  async connect(loadConfig) {
+    this.cancelRetry();
+    let config;
+    try {
+      config = await loadConfig();
+    } catch (err) {
+      this.logger.warn(`Configuration not read: ${err.message}`);
+      this.retryDelay = this.retryDelay
+        ? Math.min(this.retryDelay * 2, CONFIG_RETRY_MAX)
+        : CONFIG_RETRY_MIN;
+      this.lastStatus = undefined;
+      await this.setStatus(false, T.configFailed(this.now() + this.retryDelay));
+      this.retryTimer = this.timers.setTimeout(() => {
+        this.retryTimer = undefined;
+        return this.connect(loadConfig).catch((e) =>
+          this.logger.warn(`Retry failed: ${e.message}`),
+        );
+      }, this.retryDelay);
+      return;
+    }
+    this.retryDelay = 0;
+    await this.start(config);
+  }
+
+  cancelRetry() {
+    if (this.retryTimer !== undefined) {
+      this.timers.clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
+    }
+  }
 
   async start(raw = {}) {
     this.stop();
     const generation = ++this.generation;
-    const previous = this.started ? this.config : undefined;
     this.config = normalizeConfig(raw);
-    this.started = true;
     // Gladys keeps the status and the Discovery list in memory only: a
     // (re)connection may follow a restart of the core, so both are published
     // again on every start.
     this.lastStatus = undefined;
     this.lastDiscovered = undefined;
     this.resolveStations();
-    this.scheduleRead(previous);
+    this.scheduleRead();
     await this.tick();
     if (generation !== this.generation) {
       return;
@@ -141,6 +188,7 @@ export class HydroApp {
 
   stop() {
     this.generation += 1;
+    this.cancelRetry();
     if (this.interval !== undefined) {
       this.timers.clearInterval(this.interval);
       this.interval = undefined;
@@ -148,16 +196,17 @@ export class HydroApp {
   }
 
   /**
-   * When the values are read next. Never before the interval since the last
-   * read (persisted), except for a station never read or another source,
-   * read at once, but still never closer than a minute to the last read.
+   * When the values are read next: the interval after the last read
+   * (persisted). A station never tried, or another source than the last
+   * read's, is read at once (still a minute after the last read), unless the
+   * last read failed: then the interval, always.
    */
-  scheduleRead(previous) {
-    const { lastReadAt } = this.state;
-    const interval = this.config.pollMinutes * 60_000;
-    const unread = this.stations.some((id) => !this.state.readings.has(id));
-    const otherSource = previous && previous.source !== this.config.source;
-    this.nextRead = lastReadAt + (unread || otherSource ? MIN_READ_GAP : interval);
+  scheduleRead() {
+    const { lastReadAt, lastFailed, lastSource, attempted } = this.state;
+    const unread = this.stations.some((id) => !attempted.has(id));
+    const otherSource = lastSource !== null && lastSource !== this.config.source;
+    const soon = !lastFailed && (unread || otherSource);
+    this.nextRead = lastReadAt + (soon ? MIN_READ_GAP : this.intervalMs());
   }
 
   // --- The stations ---------------------------------------------------------------
@@ -171,11 +220,10 @@ export class HydroApp {
       let matches = searchStations(list, name);
       if (matches.length > 1) {
         // "Bern" matches several: an exact label wins.
-        const exact = matches.filter(
+        matches = matches.filter(
           (s) =>
             searchable(labelOf(s)) === searchable(name) || searchable(s.name) === searchable(name),
         );
-        matches = exact;
       }
       if (matches.length === 1) {
         if (!ids.includes(matches[0].id)) {
@@ -190,22 +238,26 @@ export class HydroApp {
     this.unresolved = unresolved;
   }
 
-  intervalMs() {
-    return this.config.pollMinutes * 60_000;
+  /** The names resolved again (a new station list): a new station is read soon. */
+  reresolve() {
+    const before = this.stations.join(',');
+    this.resolveStations();
+    if (this.stations.join(',') !== before) {
+      const soon =
+        this.state.lastReadAt + (this.state.lastFailed ? this.intervalMs() : MIN_READ_GAP);
+      this.nextRead = Math.min(this.nextRead, soon);
+    }
   }
 
   // --- Reading -----------------------------------------------------------------------
 
-  /** Read what is due (a tick never overlaps another). */
-  tick() {
-    if (this.ticking && this.tickGeneration === this.generation) {
-      return this.ticking;
-    }
-    const previous = this.ticking ?? Promise.resolve();
+  /** Run `work` after the running tick, never alongside it. */
+  enqueue(work) {
     const generation = this.generation;
+    const previous = this.ticking ?? Promise.resolve();
     const run = previous
       .catch(() => {})
-      .then(() => this.readDue(generation))
+      .then(() => work(generation))
       .finally(() => {
         if (this.ticking === run) {
           this.ticking = undefined;
@@ -216,20 +268,29 @@ export class HydroApp {
     return run;
   }
 
+  /** Read what is due (a tick never overlaps another). */
+  tick() {
+    if (this.ticking && this.tickGeneration === this.generation) {
+      return this.ticking;
+    }
+    return this.enqueue((generation) => this.readDue(generation));
+  }
+
+  /** A tick that reads the values now if the last read is more than a minute old. */
+  tickForced() {
+    return this.enqueue((generation) => this.readDue(generation, { force: true }));
+  }
+
   async readDue(generation, { force = false } = {}) {
     if (generation !== this.generation) {
       return;
     }
+    await this.flushEvents();
     const now = this.now();
     let changed = false;
     if (this.listDue(now)) {
       await this.readList();
-      const before = this.stations.join(',');
-      this.resolveStations();
-      if (this.stations.join(',') !== before) {
-        // A name found: its station is read at once (a minute after the last read).
-        this.nextRead = Math.min(this.nextRead, this.state.lastReadAt + MIN_READ_GAP);
-      }
+      this.reresolve();
       changed = true;
     }
     if (generation !== this.generation) {
@@ -242,9 +303,8 @@ export class HydroApp {
     if (generation !== this.generation) {
       return;
     }
-    const readNow =
-      this.stations.length > 0 &&
-      (force ? now >= this.state.lastReadAt + MIN_READ_GAP : now >= this.nextRead);
+    const gapOk = now >= this.state.lastReadAt + MIN_READ_GAP;
+    const readNow = this.stations.length > 0 && (force ? gapOk : now >= this.nextRead);
     const pausedUntil = this.client.pausedUntil(hostOf(this.config.source));
     if (readNow && !pausedUntil) {
       await this.readValues(generation);
@@ -260,14 +320,17 @@ export class HydroApp {
     }
   }
 
+  listRetryAt() {
+    return this.state.list.failedAt + Math.max(LIST_RETRY, this.intervalMs());
+  }
+
   listDue(now) {
     const { list } = this.state;
     if (this.config.names.length === 0) {
       return false;
     }
     const fresh = list.source === this.config.source && now - list.fetchedAt < LIST_TTL;
-    const retry = list.failedAt + Math.max(LIST_RETRY, this.intervalMs());
-    return !fresh && now >= retry;
+    return !fresh && now >= this.listRetryAt();
   }
 
   thresholdsDue(now) {
@@ -287,12 +350,7 @@ export class HydroApp {
       if (stations.length === 0) {
         throw new HydroError('answer', hostOf(source), 'empty station list');
       }
-      this.state.list = {
-        source,
-        fetchedAt: this.now(),
-        failedAt: 0,
-        stations,
-      };
+      this.state.list = { source, fetchedAt: this.now(), failedAt: 0, stations };
     } catch (err) {
       this.state.list.failedAt = this.now();
       this.logger.warn(`Station list failed: ${err.message}`);
@@ -300,14 +358,22 @@ export class HydroApp {
     this.save();
   }
 
-  /** The danger thresholds and discharge units; a failure never stops the values. */
+  /**
+   * The danger thresholds and discharge units, merged into the known ones (a
+   * known unit is never lost). A layer without any discharge unit is refused.
+   * A failure never stops the values.
+   */
   async readThresholds() {
     try {
-      const stations = parseThresholds(await this.client.thresholds());
-      if (stations.size === 0) {
-        throw new HydroError('answer', HOSTS.HYDRODATEN, 'no station');
+      const fresh = parseThresholds(await this.client.thresholds());
+      if (![...fresh.values()].some((m) => m.flowUnit)) {
+        throw new HydroError('answer', HOSTS.HYDRODATEN, 'no discharge unit in the layer');
       }
-      this.state.meta = { fetchedAt: this.now(), failedAt: 0, stations };
+      this.state.meta = {
+        fetchedAt: this.now(),
+        failedAt: 0,
+        stations: mergeThresholds(this.state.meta.stations, fresh),
+      };
     } catch (err) {
       this.state.meta.failedAt = this.now();
       this.logger.warn(`Thresholds layer failed (the values go on without it): ${err.message}`);
@@ -318,51 +384,70 @@ export class HydroApp {
   /** Read the values of every station; never throws. */
   async readValues(generation) {
     const now = this.now();
+    const source = this.config.source;
     this.state.lastReadAt = now;
-    this.nextRead = now + this.intervalMs();
-    let readings;
-    try {
-      readings =
-        this.config.source === SOURCES.SWISSHYDROAPI
-          ? await this.readSwissHydroApi(generation)
-          : await this.readFoen();
-      this.lastError = undefined;
-    } catch (err) {
-      this.lastError = err instanceof HydroError ? err : new HydroError('network', '?', 'failed');
-      if (this.lastError.kind === 'limited') {
-        this.nextRead = Math.max(this.nextRead, this.client.pausedUntil(this.lastError.host));
-      }
-      this.logger.warn(`Read failed: ${err.message}`);
-      readings = err.partial ?? new Map();
+    this.state.lastSource = source;
+    for (const id of this.stations) {
+      this.state.attempted.add(id);
     }
+    this.nextRead = now + this.intervalMs();
+    const result =
+      source === SOURCES.SWISSHYDROAPI
+        ? await this.readSwissHydroApi(generation)
+        : await this.readFoen();
     if (generation !== this.generation) {
       return;
     }
-    if (!this.lastError) {
-      this.missing = new Set(this.stations.filter((id) => !readings.has(id)));
-    }
-    for (const [id, reading] of readings) {
-      await this.accept(id, reading);
-    }
-    this.save();
-  }
-
-  async readFoen() {
-    const body = await this.client.observations(this.stations);
-    const raws = parseLindasObservations(body, this.now());
-    const readings = new Map();
-    for (const id of this.stations) {
-      const raw = raws.get(id);
-      if (raw) {
-        readings.set(id, foenReading(raw, this.state.meta.stations.get(id)));
+    this.lastError = result.error;
+    this.state.lastFailed = Boolean(result.error);
+    this.stationErrors = result.errors;
+    if (result.error) {
+      this.logger.warn(`Read failed: ${result.error.message}`);
+      if (result.error.kind === 'limited') {
+        this.nextRead = Math.max(this.nextRead, this.client.pausedUntil(result.error.host));
       }
     }
-    return readings;
+    if (result.missing) {
+      this.missing = result.missing;
+    }
+    for (const [id, reading] of result.readings) {
+      this.accept(id, reading);
+    }
+    this.save();
+    await this.flushEvents();
   }
 
-  /** One call per station, a second apart; a 429 stops the round. */
+  /** LINDAS: one query for every station. */
+  async readFoen() {
+    const readings = new Map();
+    try {
+      const body = await this.client.observations(this.stations);
+      const raws = parseLindasObservations(body, this.now());
+      for (const id of this.stations) {
+        const raw = raws.get(id);
+        if (raw) {
+          readings.set(id, foenReading(raw, this.state.meta.stations.get(id)));
+        }
+      }
+    } catch (err) {
+      return { readings, errors: new Map(), error: asHydroError(err), missing: undefined };
+    }
+    const missing = new Set(this.stations.filter((id) => !readings.has(id)));
+    return { readings, errors: new Map(), error: undefined, missing };
+  }
+
+  /**
+   * swisshydroapi: one call per station, a second apart. A station that
+   * fails is noted and the round goes on; only a 429, or three network
+   * failures in a row (the host is down), stop it.
+   */
   async readSwissHydroApi(generation) {
     const readings = new Map();
+    const errors = new Map();
+    const missing = new Set();
+    let error;
+    let networkFailures = 0;
+    let lastFailure;
     for (const [i, id] of this.stations.entries()) {
       if (generation !== this.generation) {
         break;
@@ -373,20 +458,47 @@ export class HydroApp {
       try {
         const body = await this.client.swissStation(id);
         readings.set(id, swissReading(id, body, this.state.meta.stations.get(id), this.now()));
+        networkFailures = 0;
       } catch (err) {
-        if (err instanceof HydroError && err.kind === 'not_found') {
+        const failure = asHydroError(err);
+        if (failure.kind === 'not_found') {
+          missing.add(id);
+          networkFailures = 0;
           continue;
         }
-        err.partial = readings;
-        throw err;
+        if (failure.kind === 'limited') {
+          error = failure;
+          break;
+        }
+        errors.set(id, failure.kind);
+        lastFailure = failure;
+        networkFailures = failure.kind === 'network' ? networkFailures + 1 : 0;
+        if (networkFailures >= MAX_NETWORK_FAILURES) {
+          error = failure;
+          break;
+        }
       }
     }
-    return readings;
+    if (!error && readings.size === 0 && errors.size > 0) {
+      error = lastFailure;
+    }
+    return { readings, errors, error, missing: error ? undefined : missing };
   }
 
-  /** A new reading of a station: kept, its features remembered, its triggers checked. */
-  async accept(id, reading) {
+  /**
+   * A new reading of a station: kept, its features remembered, its triggers
+   * checked. A reading older than the one kept, or with an aberrant date when
+   * the kept one was good, is ignored (the station still counts as read).
+   */
+  accept(id, reading) {
     const previous = this.state.readings.get(id);
+    if (previous && !previous.aberrant && Number.isFinite(previous.time)) {
+      const older = Number.isFinite(reading.time) && reading.time < previous.time;
+      if (older || reading.aberrant || !Number.isFinite(reading.time)) {
+        return;
+      }
+    }
+    this.missing.delete(id);
     this.state.readings.set(id, reading);
     const known = this.state.known.get(id) ?? new Set();
     for (const key of valuesOf(reading, this.state.meta.stations.get(id)).keys()) {
@@ -403,12 +515,41 @@ export class HydroApp {
       this.state.triggers.get(id) ?? newTriggerState(),
       reading,
       idsOf(this.gladys, id).device,
+      this.config.source,
     );
     this.state.triggers.set(id, state);
-    for (const event of events) {
-      await this.gladys
-        .publishSceneEvent(event.key, event.data)
-        .catch((err) => this.logger.warn(`Scene event ${event.key} failed: ${err.message}`));
+    const at = this.now();
+    this.state.pendingEvents.push(...events.map((e) => ({ ...e, at })));
+    // Bounded: the oldest go first.
+    this.state.pendingEvents = this.state.pendingEvents.slice(-MAX_PENDING_EVENTS);
+  }
+
+  /**
+   * Send the scene events waiting, in order. One Gladys refuses (down,
+   * restarting, rate limit) stays queued, persisted, and is tried again at
+   * the next tick or connection; past 30 minutes it is dropped (a late
+   * alarm is a wrong alarm).
+   */
+  async flushEvents() {
+    const now = this.now();
+    const before = this.state.pendingEvents.length;
+    this.state.pendingEvents = this.state.pendingEvents.filter(
+      (e) => now - e.at <= EVENT_QUEUE_TTL,
+    );
+    let changed = this.state.pendingEvents.length !== before;
+    while (this.state.pendingEvents.length > 0) {
+      const [event] = this.state.pendingEvents;
+      try {
+        await this.gladys.publishSceneEvent(event.key, event.data);
+      } catch (err) {
+        this.logger.warn(`Scene event ${event.key} not sent, kept for later: ${err.message}`);
+        break;
+      }
+      this.state.pendingEvents.shift();
+      changed = true;
+    }
+    if (changed) {
+      this.save();
     }
   }
 
@@ -533,6 +674,14 @@ export class HydroApp {
     if (missing > 0) {
       notes.push(T.notFound(missing));
     }
+    const failed = this.stations.filter((id) => this.stationErrors.has(id));
+    if (failed.length > 0 && !this.lastError) {
+      notes.push(T.someFailed(failed.length, reason(this.stationErrors.get(failed[0]))));
+    }
+    const { meta } = this.state;
+    if (this.config.source === SOURCES.FOEN && meta.failedAt > meta.fetchedAt) {
+      notes.push(meta.stations.size > 0 ? T.thresholdsStale : T.thresholdsMissing);
+    }
     const unknownUnit = this.stations.filter(
       (id) => this.state.readings.get(id)?.flowUnit === 'unknown',
     ).length;
@@ -583,11 +732,14 @@ export class HydroApp {
     const reading = this.state.readings.get(id);
     const colon = lang === 'fr' ? ' :' : ':';
     if (!reading) {
+      const failed = this.stationErrors.get(id);
       const why = this.missing.has(id)
         ? reason('missing')[lang]
-        : lang === 'fr'
-          ? 'pas encore lue'
-          : 'not read yet';
+        : failed
+          ? reason(failed)[lang]
+          : lang === 'fr'
+            ? 'pas encore lue'
+            : 'not read yet';
       return `- ${id}${colon} ${why}`;
     }
     const meta = this.state.meta.stations.get(id);
@@ -604,16 +756,23 @@ export class HydroApp {
       parts.push(`${numberText(reading.temperature, lang)} °C`);
     }
     if (reading.danger !== null) {
-      parts.push(lang === 'fr' ? `danger ${reading.danger}/5` : `danger level ${reading.danger}/5`);
+      parts.push(
+        lang === 'fr'
+          ? `degré de danger officiel ${reading.danger}/5`
+          : `official danger level ${reading.danger}/5`,
+      );
     }
     if (meta?.thresholds) {
       const unit = meta.metric === 'flow' ? 'm³/s' : 'm';
       const values = meta.thresholds.map((t) => numberText(t, lang, 2)).join(' / ');
       parts.push(
         lang === 'fr'
-          ? `seuils des degrés 2 à 5 : ${values} ${unit}`
-          : `thresholds of levels 2 to 5: ${values} ${unit}`,
+          ? `seuils wl_1 à wl_4 de la carte hydrodaten : ${values} ${unit}`
+          : `hydrodaten map thresholds wl_1 to wl_4: ${values} ${unit}`,
       );
+    }
+    if (this.stationErrors.has(id)) {
+      parts.push(`(${reason(this.stationErrors.get(id))[lang]})`);
     }
     if (Number.isFinite(reading.time) && !reading.aberrant) {
       parts.push(
@@ -651,12 +810,11 @@ export class HydroApp {
   async testConnection() {
     const deadline = this.now() + TEST_DEADLINE;
     await this.before(deadline, () => this.tickForced());
+    if (this.stations.length === 0) {
+      return this.join(this.unresolved.length > 0 ? this.notes() : [T.noStation]);
+    }
     const en = [];
     const fr = [];
-    if (this.stations.length === 0) {
-      const text = this.join(this.unresolved.length > 0 ? this.notes() : [T.noStation]);
-      return text;
-    }
     const pausedUntil = this.client.pausedUntil(hostOf(this.config.source));
     if (pausedUntil) {
       en.push(T.paused(pausedUntil).en);
@@ -679,23 +837,6 @@ export class HydroApp {
     return { en: en.join('\n'), fr: fr.join('\n') };
   }
 
-  /** A tick that reads the values now if the last read is more than a minute old. */
-  tickForced() {
-    const generation = this.generation;
-    const previous = this.ticking ?? Promise.resolve();
-    const run = previous
-      .catch(() => {})
-      .then(() => this.readDue(generation, { force: true }))
-      .finally(() => {
-        if (this.ticking === run) {
-          this.ticking = undefined;
-        }
-      });
-    this.ticking = run;
-    this.tickGeneration = generation;
-    return run;
-  }
-
   /** "Search stations": the stations whose number, name or water body match. */
   async search(fields = {}) {
     const query = String(fields?.query ?? '')
@@ -707,19 +848,21 @@ export class HydroApp {
         fr: "Tapez quelques lettres d'une rivière, d'un lac ou d'un lieu.",
       };
     }
-    const { list } = this.state;
     const now = this.now();
+    const { list } = this.state;
     const usable = list.source === this.config.source && list.stations.length > 0;
     const stale = !usable || now - list.fetchedAt >= LIST_TTL;
-    // A click may read the list again, but never within a minute of a failure.
-    if (stale && now >= list.failedAt + MIN_READ_GAP) {
-      await this.before(now + TEST_DEADLINE, () => this.readList());
-      const before = this.stations.join(',');
-      this.resolveStations();
-      if (this.stations.join(',') !== before) {
-        // A name of the configuration found: read it at the next tick.
-        this.nextRead = Math.min(this.nextRead, this.state.lastReadAt + MIN_READ_GAP);
-      }
+    // A click may read the list again, never sooner than the usual retry
+    // after a failure, and never alongside a tick.
+    if (stale && now >= this.listRetryAt()) {
+      await this.before(now + TEST_DEADLINE, () =>
+        this.enqueue(async (generation) => {
+          await this.readList();
+          if (generation === this.generation) {
+            this.reresolve();
+          }
+        }),
+      );
     }
     const stations = this.state.list.source === this.config.source ? this.state.list.stations : [];
     if (stations.length === 0) {
@@ -738,16 +881,15 @@ export class HydroApp {
         fr: `Aucune station ne correspond à « ${query} ».`,
       };
     }
-    const kind = (s, lang) =>
-      s.kind === 'lake'
-        ? lang === 'fr'
-          ? ' (lac)'
-          : ' (lake)'
-        : s.kind === 'river'
-          ? lang === 'fr'
-            ? ' (cours d’eau)'
-            : ' (river)'
-          : '';
+    const kind = (s, lang) => {
+      if (s.kind === 'lake') {
+        return lang === 'fr' ? ' (lac)' : ' (lake)';
+      }
+      if (s.kind === 'river') {
+        return lang === 'fr' ? ' (cours d’eau)' : ' (river)';
+      }
+      return '';
+    };
     const shown = matches.slice(0, 15);
     const more = matches.length - shown.length;
     const lines = (lang) => [
@@ -759,4 +901,9 @@ export class HydroApp {
       fr: ['Copiez le numéro dans « Stations » :', ...lines('fr')].join('\n'),
     };
   }
+}
+
+/** Any failure as a HydroError (a bug of a parser counts as an unexpected answer). */
+function asHydroError(err) {
+  return err instanceof HydroError ? err : new HydroError('answer', '?', String(err?.message));
 }

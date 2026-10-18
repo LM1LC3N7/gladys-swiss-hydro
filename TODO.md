@@ -14,20 +14,23 @@
 
 ## To confirm
 
-- [ ] `wl_1` .. `wl_4` of the hydrodaten.admin.ch layer are read as the lower
-      bounds of the danger levels 2 to 5. Consistent with the official levels
-      seen on 2026-10-18 (Aare in Bern: 58 m³/s, level 1, thresholds 360 /
-      430 / 500 / 560), but not documented by the FOEN: confirm during a
-      flood (the LINDAS level and the computed one should agree).
+- [ ] `wl_1` .. `wl_4` of the hydrodaten.admin.ch layer are shown as the
+      assumed start of the danger levels 2 to 5. The check of 2026-10-18
+      proves nothing: every station read that day was at level 1 (Aare in
+      Bern: 58 m³/s against 360 / 430 / 500 / 560). Confirm during a flood
+      by comparing the official LINDAS level with the `wl_N` crossed. They
+      are never used to compute a level (review B1).
 - [ ] That map layer is the data of the FOEN website, not a documented API:
-      it may change without notice. Read once a day; when it fails, only the
-      thresholds and the l/s detection are missing.
-- [ ] LINDAS gives the discharge without its unit; 6 stations of the map layer are in
-      l/s (`metric: discharge_ls` on the map layer). The ~27 LINDAS stations
-      missing from the layer get no flow with the FOEN source (their unit is
-      unknown); the swisshydroapi source gives the unit. Ask the FOEN to add
-      the unit to LINDAS?
-- [ ] A water level of exactly 0.000 m is dropped (how LINDAS shows a broken
+      it may change without notice. Read once a day, merged into the known
+      units; without it (never read yet), the FOEN source gives no flow.
+- [ ] LINDAS gives the discharge without its unit. On 2026-10-18: LINDAS had
+      233 stations, the map layer 207 features; 6 of them in l/s
+      (`metric: discharge_ls`). 27 LINDAS stations are missing from the
+      layer, 14 of which have a discharge (2041, 2079, 2156, 2251, 2252,
+      2329, 2353, 2356, 2404, 2492, 2631, 2632, 2650, 520): no flow for them
+      with the FOEN source (2492 gives 749, l/s by the look of it);
+      swisshydroapi gives their unit. Ask the FOEN to add the unit to
+      LINDAS?- [ ] A water level of exactly 0.000 m is dropped (how LINDAS shows a broken
       level sensor, e.g. 2602 Domat/Ems on 2026-10-18). A relative-height
       station could truly read 0: never seen.
 - [ ] Rate limits: neither LINDAS nor swisshydroapi documents one; 429 and
@@ -57,8 +60,15 @@
   ("Open use") with the official danger level, one query for all stations.
   swisshydroapi is what swisshydrodata (the reference to port) reads: ported
   as the second source (`/stations`, `/station/<id>`), because it has the
-  units and more stations (331 against 233); its danger level is computed
-  from the official thresholds.
+  units and more stations (331 against 233).
+- **No computed danger level (review B1, Louis's decision)**: the danger
+  level and the `danger_level_reached` event come only from LINDAS (the
+  official level); an `Undefined` level publishes nothing. With
+  swisshydroapi there is no danger-level feature and no danger event. The
+  `wl_1` .. `wl_4` values stay as features named "Hydrodaten map threshold
+  wl_N (assumed start of danger level N+1)" (feature keys
+  `danger-threshold-2` .. `-5`, unchanged), shown, never compared with
+  anything. `m ü.M.` (`masl`) and `m` are two units, never compared.
 - **swisshydrodata (MIT) as the reference**, not copied: Python, so its two
   calls and their answer shape are re-implemented, credited in the docs and
   `THIRD_PARTY_NOTICES.md` (copied into the image with `LICENSE`). Its
@@ -78,6 +88,47 @@
   (values, thresholds, list, buttons), persisted in `/data`, capped at 6
   hours when read back, never cleared by a reconnection. A good answer ends
   it.
+- **Restart loops (review I1)**: the stations tried and the source of the
+  last read are persisted, with its outcome. A station never tried, or
+  another source than the last read's, is read a minute after the last read;
+  after a failed read, always the interval (a station without data, a 503,
+  a new station: at most one read per interval).
+- **swisshydroapi rounds (review I2)**: a failing station is noted (status,
+  test button) and the round goes on; only a 429, or three network failures
+  in a row (host down), stop it. Every station failing counts as a failed
+  read.
+- **Scene events (review I3)**: the trigger state is committed with the
+  reading, the events go to a persisted queue (50 at most) sent at once,
+  replayed at every tick and connection when Gladys refused them, dropped
+  after 30 minutes (a late alarm is a wrong alarm). Never sent twice: an
+  event leaves the queue only once Gladys took it.
+- **Trigger resets (reviews I4, M2)**: the trigger state of a station holds
+  its source, its discharge unit and the date of its last reading; another
+  source, another unit or a gap over 3 hours gives a fresh state that only
+  arms.
+- **Older readings (review I5)**: a reading older than the one kept, or with
+  an aberrant date while the kept one is good, is ignored; the station still
+  counts as read.
+- **Thresholds layer (review I6)**: merged into the known one (a known unit
+  or threshold is never replaced by none, a station missing from a new layer
+  keeps its facts); a layer where no station has a discharge unit is
+  refused; a dedicated status line says when it is unavailable.
+- **Danger hysteresis (review I7)**: a fired level is re-armed only after the
+  danger level stayed under it for 30 minutes (2, 3, 2, 3, 2, 3 fires once).
+- **Configuration not read (review I8)**: `connect()` asks Gladys again by a
+  timer, 1 minute then doubling up to 30, with an error status; a
+  disconnection cancels it.
+- **swisshydroapi parameters (review M1)**: a parameter whose date is not
+  current is left out (a sensor stopped while the others go on); the
+  temperature needs `°C`.
+- **Dates (review M5)**: the published date carries CET or CEST
+  ("2026-10-18 05:30 CEST"), so the repeated hour of the end of summer time
+  is not ambiguous; the end of a pause is shown in Swiss time too.
+- **Not an alarm (review M6)**: "not an official warning system, nor the
+  FOEN regional warning" opens the docs and the manifest intro.
+- **Search button (review M4)**: it reads the list again only after the usual
+  retry delay (`max(LIST_RETRY, interval)` after a failure), through the
+  tick queue, never alongside a read.
 - **Persisted state** (`/data/swiss-hydro-state.json`, atomic write): pauses,
   last read, readings, thresholds, station list, trigger states, feature keys
   ever declared. Read back through validators (ids, numbers, keys), Maps

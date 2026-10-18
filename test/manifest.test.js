@@ -92,6 +92,21 @@ test('the store basics', () => {
   assert.match(manifest.description.en, /Unofficial/);
   assert.match(manifest.description.fr, /non officiel/);
   assert.match(manifest.config_schema[0].description.en, /not affiliated with the Swiss Federal/);
+  // Not an alarm: said first, in the intro and at the top of the docs.
+  assert.match(
+    manifest.config_schema[0].description.en,
+    /^Not an official warning system, nor the FOEN regional warning/,
+  );
+  assert.match(
+    manifest.config_schema[0].description.fr,
+    /^Pas un système d'alerte officiel, ni l'alerte régionale de l'OFEV/,
+  );
+  assert.match(read('docs/en.md').split('\n').slice(0, 4).join(' '), /Not an official warning/);
+  assert.match(read('docs/fr.md').split('\n').slice(0, 4).join(' '), /Pas un système d'alerte/);
+  // The danger level is never computed (only the official one of LINDAS).
+  for (const [path, text] of texts(manifest)) {
+    assert.doesNotMatch(`${text.en} ${text.fr}`, /computed|calcul/i, path);
+  }
 });
 
 test('version 0.1.0 everywhere, and the image is tagged with it', () => {

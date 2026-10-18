@@ -126,6 +126,20 @@ export const FLOW_THRESHOLDS = [
 /** A crossed flow mark is re-armed once the flow falls below this share of it. */
 export const FLOW_REARM = 0.95;
 
+/** A danger level fired is re-armed once the level stayed under it this long. */
+export const DANGER_REARM = 30 * 60_000;
+
+/** Scene events Gladys did not take: replayed for this long, at most this many. */
+export const EVENT_QUEUE_TTL = 30 * 60_000;
+export const MAX_PENDING_EVENTS = 50;
+
+/** swisshydroapi: the round stops after this many network failures in a row (host down). */
+export const MAX_NETWORK_FAILURES = 3;
+
+/** The configuration could not be read from Gladys: tried again after 1 minute, doubling up to 30. */
+export const CONFIG_RETRY_MIN = 60_000;
+export const CONFIG_RETRY_MAX = 30 * 60_000;
+
 /** Manifest `actions` keys. */
 export const ACTIONS = {
   TEST: 'test_connection',

@@ -39,10 +39,11 @@ gladys.onConfigUpdated(async (config) => {
 // --- Connection lifecycle -------------------------------------------------------
 // A reconnection keeps the pauses, the last read and the trigger states; it
 // publishes the status and the Discovery tab again (Gladys keeps them in
-// memory only).
+// memory only). A configuration Gladys does not give is asked again by a
+// timer (1 minute, then more and more spaced), with an error status.
 gladys.on('connected', async () => {
   try {
-    await app.start(await gladys.getConfig());
+    await app.connect(() => gladys.getConfig());
   } catch (err) {
     logger.error('Start failed', err);
   }

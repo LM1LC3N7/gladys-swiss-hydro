@@ -108,15 +108,19 @@ const clock = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
+  timeZoneName: 'short',
 });
 
 /**
  * The time of a measurement as the Swiss stations show it, whatever the time
- * zone of the container: "2026-10-18 05:30" (Europe/Zurich).
+ * zone of the container: "2026-10-18 05:30 CEST" (Europe/Zurich, CET in
+ * winter), so the hour is never ambiguous on the night summer time ends.
  */
 export function swissTime(ms) {
   const parts = Object.fromEntries(clock.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+  const zone =
+    parts.timeZoneName === 'CET' || parts.timeZoneName === 'CEST' ? parts.timeZoneName : '';
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}${zone ? ` ${zone}` : ''}`;
 }
 
 // --- Plausible values ----------------------------------------------------------------
@@ -148,7 +152,11 @@ export function toCubicMeters(value, unit) {
   return null;
 }
 
-/** "m³/s", "m3/s", "l/s", "m ü.M.", "m", "°C" -> a known unit, or null. */
+/**
+ * "m³/s", "m3/s", "l/s", "m ü.M." (above sea level), "m" (a height, maybe
+ * relative), "°C" -> a known unit, or null. "m ü.M." and "m" stay apart:
+ * never compared with each other.
+ */
 export function unitOf(text) {
   const u = cleanText(text, 20).toLowerCase().replace(/\s+/g, ' ');
   if (u === 'm³/s' || u === 'm3/s') {
@@ -157,8 +165,14 @@ export function unitOf(text) {
   if (u === 'l/s') {
     return 'l/s';
   }
-  if (u === 'm' || u === 'm ü.m.' || u === 'm a.s.l.') {
+  if (u === 'm ü.m.' || u === 'm a.s.l.' || u === 'm asl') {
+    return 'masl';
+  }
+  if (u === 'm') {
     return 'm';
+  }
+  if (u === '°c') {
+    return 'celsius';
   }
   return null;
 }
@@ -274,10 +288,12 @@ export function quantity(text) {
 
 /**
  * The thresholds layer -> Map(id -> { kind, metric, flowUnit, thresholds }):
- *   metric      'flow' (thresholds in m³/s) or 'level' (in m), or null
+ *   metric      'flow' (thresholds in m³/s) or 'level' (in m above sea level), or null
  *   flowUnit    the unit LINDAS uses for the discharge of the station
- *   thresholds  the lower bounds of the danger levels 2, 3, 4 and 5, or null
+ *   thresholds  `wl_1` .. `wl_4` of the map, taken as the start of the danger
+ *               levels 2 to 5 (an assumption: the FOEN does not document them)
  * Thresholds that are missing, of another unit or not increasing are dropped.
+ * They are shown, never used to compute a danger level.
  */
 export function parseThresholds(body) {
   const stations = new Map();
@@ -302,7 +318,10 @@ export function parseThresholds(body) {
         if (!q) {
           return null;
         }
-        return metric === 'flow' ? toCubicMeters(q.value, q.unit) : q.unit === 'm' ? q.value : null;
+        if (metric === 'flow') {
+          return toCubicMeters(q.value, q.unit);
+        }
+        return q.unit === 'masl' ? q.value : null;
       });
       const increasing = values.every((v, i) => v !== null && (i === 0 || v > values[i - 1]));
       thresholds = increasing ? values.map((v) => round(v, 3)) : null;
@@ -312,17 +331,23 @@ export function parseThresholds(body) {
   return stations;
 }
 
-/** The danger level a value reaches against the thresholds of its station (1 to 5), or null. */
-export function dangerFrom(reading, meta) {
-  if (!meta?.thresholds) {
-    return null;
+/**
+ * Merge a new thresholds layer into the known one: a station missing from
+ * the new layer keeps its facts, and a known discharge unit is never
+ * replaced by none.
+ */
+export function mergeThresholds(known, fresh) {
+  const merged = new Map(known);
+  for (const [id, entry] of fresh) {
+    const old = known.get(id);
+    merged.set(id, {
+      ...entry,
+      flowUnit: entry.flowUnit ?? old?.flowUnit ?? null,
+      thresholds: entry.thresholds ?? old?.thresholds ?? null,
+      metric: entry.metric ?? old?.metric ?? null,
+    });
   }
-  const value =
-    meta.metric === 'flow' ? reading.flow : meta.metric === 'level' ? reading.level : null;
-  if (value === null || value === undefined) {
-    return null;
-  }
-  return 1 + meta.thresholds.filter((t) => value >= t).length;
+  return merged;
 }
 
 // --- swisshydroapi (the API swisshydrodata reads) -----------------------------------------------
@@ -336,23 +361,37 @@ const parameter = (body, name) => {
 
 /**
  * `/station/<id>` -> a reading. Each parameter carries its unit and its
- * date; the most recent believable date is the date of the reading. The
- * danger level is not part of this API: it is computed from the official
- * thresholds when they are known.
+ * date: a parameter whose date is not current (a sensor stopped while the
+ * others go on) is dropped, the most recent current date is the date of the
+ * reading. This API has no danger level: none is published for it.
  */
 export function swissReading(id, body, meta, now) {
-  const discharge = parameter(body, 'discharge');
-  const level = parameter(body, 'level');
-  const temperature = parameter(body, 'temperature');
-  const times = [discharge, level, temperature]
-    .filter(Boolean)
-    .map((p) => parseTime(p.datetime))
-    .filter((t) => Number.isFinite(t));
+  const all = ['discharge', 'level', 'temperature'].map((name) => {
+    const p = parameter(body, name);
+    const t = p ? parseTime(p.datetime) : NaN;
+    return { name, p, t, fresh: Boolean(p) && isFresh({ time: t }, now) };
+  });
+  const times = all.filter((x) => Number.isFinite(x.t)).map((x) => x.t);
   const believed = times.filter((t) => believable(t, now));
-  const time = believed.length > 0 ? Math.max(...believed) : NaN;
+  const fresh = all.filter((x) => x.fresh);
+  const time =
+    fresh.length > 0
+      ? Math.max(...fresh.map((x) => x.t))
+      : believed.length > 0
+        ? Math.max(...believed)
+        : NaN;
+  const use = (name) => fresh.find((x) => x.name === name) ?? all.find((x) => x.name === name);
+  const pick = (name) => {
+    const x = use(name);
+    // With a current parameter, the stale ones are left out.
+    return x.p && (x.fresh || fresh.length === 0) ? x.p : null;
+  };
+  const discharge = pick('discharge');
+  const level = pick('level');
+  const temperature = pick('temperature');
   const flowUnit = discharge ? unitOf(discharge.unit) : null;
   const levelUnit = level ? unitOf(level.unit) : null;
-  const reading = {
+  return {
     id,
     name: cleanText(body?.name),
     waterBody: cleanText(body?.['water-body-name']),
@@ -360,13 +399,15 @@ export function swissReading(id, body, meta, now) {
     time,
     aberrant: times.length > 0 && believed.length === 0,
     flow: discharge ? toCubicMeters(num(discharge.value), flowUnit) : null,
-    flowUnit: discharge && !flowUnit ? 'unknown' : flowUnit,
-    level: level && levelUnit === 'm' ? levelValue(num(level.value)) : null,
-    temperature: temperature ? temperatureValue(num(temperature.value)) : null,
+    flowUnit: discharge && !['m3/s', 'l/s'].includes(flowUnit) ? 'unknown' : flowUnit,
+    level:
+      level && (levelUnit === 'm' || levelUnit === 'masl') ? levelValue(num(level.value)) : null,
+    temperature:
+      temperature && unitOf(temperature.unit) === 'celsius'
+        ? temperatureValue(num(temperature.value))
+        : null,
     danger: null,
   };
-  reading.danger = dangerFrom(reading, meta);
-  return reading;
 }
 
 /** `/stations` -> [{ id, name, waterBody, kind }]. */
@@ -471,7 +512,7 @@ export const FEATURE_DEFS = new Map([
   ...[2, 3, 4, 5].map((level) => [
     FEATURES[`THRESHOLD_${level}`],
     {
-      name: `Danger level ${level} threshold`,
+      name: `Hydrodaten map threshold wl_${level - 1} (assumed start of danger level ${level})`,
       category: CAT.UNKNOWN,
       type: TYPES.UNKNOWN.UNKNOWN,
       min: -100,

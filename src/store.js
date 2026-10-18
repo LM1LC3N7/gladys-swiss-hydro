@@ -20,6 +20,8 @@ import {
   HOSTS,
   LIMITED_MAX,
   MAX_LIST_ENTRIES,
+  MAX_PENDING_EVENTS,
+  SCENE_TRIGGERS,
   SOURCES,
 } from './constants.js';
 import { FEATURE_DEFS, cleanText } from './model.js';
@@ -152,8 +154,41 @@ const meta = (m) => {
 const trigger = (t) => ({
   armed: new Set(list(t?.armed).filter((v) => FLOW_THRESHOLDS.includes(v))),
   danger: DANGER_LEVELS.includes(t?.danger) ? t.danger : null,
+  fired: new Set(list(t?.fired).filter((v) => DANGER_LEVELS.includes(v))),
+  below: new Map(
+    list(t?.below)
+      .filter((p) => Array.isArray(p) && DANGER_LEVELS.includes(p[0]) && time(p[1]) > 0)
+      .map((p) => [p[0], p[1]]),
+  ),
   started: t?.started === true,
+  lastAt: time(t?.lastAt),
+  source: Object.values(SOURCES).includes(t?.source) ? t.source : null,
+  unit: ['m3/s', 'l/s', 'unknown'].includes(t?.unit) ? t.unit : null,
 });
+
+/** A scene event waiting to be sent: a declared key, flat primitive data. */
+const pendingEvent = (e) => {
+  if (!e || !Object.values(SCENE_TRIGGERS).includes(e.key) || time(e.at) === 0) {
+    return null;
+  }
+  const data = e.data && typeof e.data === 'object' && !Array.isArray(e.data) ? e.data : null;
+  if (!data) {
+    return null;
+  }
+  const entries = Object.entries(data).slice(0, 30);
+  const clean = new Map();
+  for (const [k, v] of entries) {
+    if (!/^[a-z][a-z_]{0,39}$/.test(k) || k === 'constructor' || k === 'prototype') {
+      continue;
+    }
+    if (v === null || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))) {
+      clean.set(k, v);
+    } else if (typeof v === 'string') {
+      clean.set(k, v.slice(0, 1000));
+    }
+  }
+  return { key: e.key, data: Object.fromEntries(clean), at: e.at };
+};
 
 /** An empty state. */
 export function emptyState() {
@@ -165,6 +200,10 @@ export function emptyState() {
     list: { source: null, fetchedAt: 0, failedAt: 0, stations: [] },
     triggers: new Map(),
     known: new Map(),
+    attempted: new Set(),
+    lastSource: null,
+    lastFailed: false,
+    pendingEvents: [],
   };
 }
 
@@ -214,6 +253,18 @@ export function loadState(raw, now = Date.now()) {
   for (const [id, keys] of entries(raw.known)) {
     state.known.set(id, new Set(list(keys).filter((k) => FEATURE_DEFS.has(k))));
   }
+  for (const id of list(raw.attempted).slice(0, MAX_LIST_ENTRIES)) {
+    const valid = stationId(id);
+    if (valid) {
+      state.attempted.add(valid);
+    }
+  }
+  state.lastSource = Object.values(SOURCES).includes(raw.lastSource) ? raw.lastSource : null;
+  state.lastFailed = raw.lastFailed === true;
+  state.pendingEvents = list(raw.pendingEvents)
+    .slice(0, MAX_PENDING_EVENTS)
+    .map(pendingEvent)
+    .filter((e) => e && e.at <= now);
   return state;
 }
 
@@ -232,8 +283,21 @@ export function saveState(state) {
     list: state.list,
     triggers: [...state.triggers.entries()].map(([id, t]) => [
       id,
-      { armed: [...t.armed], danger: t.danger, started: t.started },
+      {
+        armed: [...t.armed],
+        danger: t.danger,
+        fired: [...t.fired],
+        below: [...t.below.entries()],
+        started: t.started,
+        lastAt: t.lastAt,
+        source: t.source,
+        unit: t.unit,
+      },
     ]),
     known: [...state.known.entries()].map(([id, keys]) => [id, [...keys]]),
+    attempted: [...state.attempted],
+    lastSource: state.lastSource,
+    lastFailed: state.lastFailed,
+    pendingEvents: state.pendingEvents,
   };
 }

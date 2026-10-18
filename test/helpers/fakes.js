@@ -53,6 +53,14 @@ export function createFakeTimers() {
     clearTimeout: (id) => pending.delete(id),
     clearInterval: (id) => pending.delete(id),
     intervals: () => [...pending.values()].filter((t) => t.kind === 'interval'),
+    timeouts: () => [...pending.values()].filter((t) => t.kind === 'timeout'),
+    /** Fire (and remove) every pending timeout once. */
+    async runTimeouts() {
+      for (const t of [...pending.values()].filter((t) => t.kind === 'timeout')) {
+        pending.delete(t.id);
+        await t.fn();
+      }
+    },
     async runIntervals() {
       for (const t of [...pending.values()].filter((t) => t.kind === 'interval')) {
         await t.fn();

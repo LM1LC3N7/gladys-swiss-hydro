@@ -54,10 +54,15 @@ warranty on the data nor on its availability.
   (`https://ld.admin.ch/vocabulary/TermsOfUse/Open-Use`, the "open use" terms
   of [opendata.swiss](https://opendata.swiss/en/terms-of-use)): free use,
   commercial use allowed. The source is named anyway.
-- **The flood danger thresholds and discharge units of the stations**, read
-  once a day from the public map layer of
+  The flood danger level (1 to 5) is published only as LINDAS gives it, never
+  computed.
+- **The values `wl_1` to `wl_4` and the discharge units of the stations**,
+  read once a day from the public map layer of
   [hydrodaten.admin.ch](https://www.hydrodaten.admin.ch), under the
   [terms of use of the federal administration websites](https://www.admin.ch/gov/en/start/terms-and-conditions.html).
-  The danger levels (1 to 5) are those of the FOEN flood warnings; the
-  official warnings remain those of the FOEN and of the cantons
-  ([natural hazards portal](https://www.natural-hazards.ch)).
+  The `wl_N` values are shown as thresholds assumed to start the danger
+  levels 2 to 5; the FOEN does not document them as such.
+
+This integration is not an official warning system, nor the FOEN regional
+warning: the official warnings are those of the FOEN and of the cantons
+([natural hazards portal](https://www.natural-hazards.ch)).

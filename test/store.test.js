@@ -36,14 +36,31 @@ test('a round trip keeps everything', () => {
     flowUnit: 'm3/s',
     thresholds: [360, 430, 500, 560],
   });
-  state.triggers.set('2135', { armed: new Set([500, 700]), danger: 1, started: true });
+  state.triggers.set('2135', {
+    armed: new Set([500, 700]),
+    danger: 3,
+    fired: new Set([2, 3]),
+    below: new Map([[3, NOW - 60_000]]),
+    started: true,
+    lastAt: NOW - 600_000,
+    source: 'foen',
+    unit: 'm3/s',
+  });
+  state.attempted.add('2135');
+  state.lastSource = 'foen';
+  state.lastFailed = true;
+  state.pendingEvents.push({ key: 'flow_above', data: { device: 'x', flow: 520 }, at: NOW - 1000 });
   state.known.set('2135', new Set(['flow', 'level']));
   const back = loadState(JSON.parse(JSON.stringify(saveState(state))), NOW);
   assert.deepEqual(back.pauses.get(HOSTS.LINDAS), { until: NOW + 60_000, streak: 2 });
   assert.equal(back.lastReadAt, NOW - 1000);
   assert.deepEqual(back.readings.get('2135'), state.readings.get('2135'));
   assert.deepEqual(back.meta.stations.get('2135'), state.meta.stations.get('2135'));
-  assert.deepEqual([...back.triggers.get('2135').armed], [500, 700]);
+  assert.deepEqual(back.triggers.get('2135'), state.triggers.get('2135'));
+  assert.deepEqual([...back.attempted], ['2135']);
+  assert.equal(back.lastSource, 'foen');
+  assert.equal(back.lastFailed, true);
+  assert.deepEqual(back.pendingEvents, state.pendingEvents);
   assert.deepEqual([...back.known.get('2135')], ['flow', 'level']);
 });
 
@@ -62,7 +79,10 @@ test('a hostile or broken file: nothing reaches a prototype, bounds hold', () =>
     ],
     "meta": { "stations": [["__proto__", {}], ["constructor", {}], ["2135", { "thresholds": [3, 2, 1, 0] }]] },
     "list": { "source": "evil", "stations": [{ "id": "1" }] },
-    "triggers": [["2135", { "armed": [500, 123, "x"], "danger": 9 }]],
+    "triggers": [["2135", { "armed": [500, 123, "x"], "danger": 9, "fired": [2, 9], "below": [[3, 5], ["x", 1]], "source": "evil", "unit": "gal" }]],
+    "attempted": ["2135", "__proto__", "x"],
+    "lastSource": "evil",
+    "pendingEvents": [{ "key": "evil", "data": {}, "at": 1 }, { "key": "flow_above", "data": { "__proto__": 1, "flow": 3, "obj": {} }, "at": 1 }],
     "known": [["2135", ["flow", "__proto__", "nope"]]]
   }`);
   const state = loadState(raw, NOW);
@@ -82,6 +102,14 @@ test('a hostile or broken file: nothing reaches a prototype, bounds hold', () =>
   assert.deepEqual(state.list.stations, []);
   assert.deepEqual([...state.triggers.get('2135').armed], [500]);
   assert.equal(state.triggers.get('2135').danger, null);
+  assert.deepEqual([...state.triggers.get('2135').fired], [2]);
+  assert.deepEqual([...state.triggers.get('2135').below], [[3, 5]]);
+  assert.equal(state.triggers.get('2135').source, null);
+  assert.equal(state.triggers.get('2135').unit, null);
+  assert.deepEqual([...state.attempted], ['2135']);
+  assert.equal(state.lastSource, null);
+  assert.equal(state.pendingEvents.length, 1);
+  assert.deepEqual(state.pendingEvents[0].data, { flow: 3 });
   assert.deepEqual([...state.known.get('2135')], ['flow']);
   assert.equal({}.polluted, undefined);
   // Not a state at all.
