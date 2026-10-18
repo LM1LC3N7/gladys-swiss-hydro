@@ -1,0 +1,24 @@
+{
+  "name": "Melera, (Valle Morobbia)",
+  "water-body-name": "Melera",
+  "water-body-type": "river",
+  "coordinates": { "latitude": 46.17152631052968, "longitude": 9.083023354945414 },
+  "parameters": {
+    "level": {
+      "unit": "m",
+      "datetime": "2026-10-18T04:30:00+01:00",
+      "value": 958.358,
+      "max-24h": 958.359,
+      "mean-24h": 958.357,
+      "min-24h": 958.354
+    },
+    "discharge": {
+      "unit": "l/s",
+      "datetime": "2026-10-18T04:30:00+01:00",
+      "value": 15.0,
+      "max-24h": 16.0,
+      "mean-24h": 14.847,
+      "min-24h": 14.0
+    }
+  }
+}

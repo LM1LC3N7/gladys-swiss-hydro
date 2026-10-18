@@ -1,0 +1,291 @@
+{
+  "head": {
+    "vars": [
+      "obs",
+      "id",
+      "name",
+      "waterBody",
+      "wbName",
+      "time",
+      "discharge",
+      "level",
+      "temperature",
+      "danger"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2135"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2135"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Bern, Schönau"
+        },
+        "waterBody": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/waterbody/Aare"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Aare"
+        },
+        "time": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "type": "literal",
+          "value": "2026-10-18T04:30:00+01:00"
+        },
+        "discharge": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "57.783"
+        },
+        "level": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "501.712"
+        },
+        "temperature": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "15.120"
+        },
+        "danger": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2009"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2009"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Porte du Scex"
+        },
+        "waterBody": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/waterbody/Rhône"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Rhône"
+        },
+        "time": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "type": "literal",
+          "value": "2026-10-18T04:30:00+01:00"
+        },
+        "discharge": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "99.156"
+        },
+        "level": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "374.831"
+        },
+        "temperature": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "8.550"
+        },
+        "danger": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2602"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2602"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Domat/Ems"
+        },
+        "waterBody": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/waterbody/Rhein"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Rhein"
+        },
+        "time": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "type": "literal",
+          "value": "2026-10-18T04:30:00+01:00"
+        },
+        "discharge": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "29.559"
+        },
+        "level": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "563.875"
+        },
+        "danger": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/520"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "520"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Rämismühle"
+        },
+        "waterBody": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/waterbody/Töss"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Töss"
+        },
+        "time": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "type": "literal",
+          "value": "2026-10-18T04:20:00+01:00"
+        },
+        "discharge": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "0.056"
+        },
+        "level": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "523.718"
+        },
+        "temperature": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "13.570"
+        },
+        "danger": {
+          "type": "uri",
+          "value": "https://cube.link/Undefined"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/520"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "520"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Rämismühle"
+        },
+        "waterBody": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/waterbody/Töss"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Töss"
+        },
+        "time": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "type": "literal",
+          "value": "2026-10-18T04:15:00+01:00"
+        },
+        "discharge": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "0.056"
+        },
+        "level": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "523.718"
+        },
+        "temperature": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "13.570"
+        },
+        "danger": {
+          "type": "uri",
+          "value": "https://cube.link/Undefined"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/lake/observation/2043"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2043"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Berlingen"
+        },
+        "waterBody": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/waterbody/Bodensee%2C%20Untersee"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Bodensee, Untersee"
+        },
+        "time": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "type": "literal",
+          "value": "2026-10-18T04:30:00+01:00"
+        },
+        "level": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+          "type": "literal",
+          "value": "394.233"
+        },
+        "danger": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "1"
+        }
+      }
+    ]
+  }
+}

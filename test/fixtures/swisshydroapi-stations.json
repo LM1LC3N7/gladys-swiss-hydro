@@ -1,0 +1,18 @@
+[
+  { "id": "2232", "name": "Adelboden", "water-body-name": "Allenbach", "water-body-type": "river" },
+  { "id": "2135", "name": "Bern, Schönau", "water-body-name": "Aare", "water-body-type": "river" },
+  { "id": "2009", "name": "Porte du Scex", "water-body-name": "Rhône", "water-body-type": "river" },
+  {
+    "id": "2206",
+    "name": "Melera, (Valle Morobbia)",
+    "water-body-name": "Melera",
+    "water-body-type": "river"
+  },
+  {
+    "id": "2043",
+    "name": "Berlingen",
+    "water-body-name": "Bodensee, Untersee",
+    "water-body-type": "lake"
+  },
+  { "id": "2044", "name": "Andelfingen    ", "water-body-name": "Thur", "water-body-type": "river" }
+]

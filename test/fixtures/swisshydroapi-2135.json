@@ -1,0 +1,32 @@
+{
+  "name": "Bern, Schönau",
+  "water-body-name": "Aare",
+  "water-body-type": "river",
+  "coordinates": { "latitude": 46.93309030401403, "longitude": 7.447960704633386 },
+  "parameters": {
+    "level": {
+      "unit": "m",
+      "datetime": "2026-10-18T04:30:00+01:00",
+      "value": 501.712,
+      "max-24h": 501.811,
+      "mean-24h": 501.777,
+      "min-24h": 501.712
+    },
+    "discharge": {
+      "unit": "m3/s",
+      "datetime": "2026-10-18T04:30:00+01:00",
+      "value": 57.783,
+      "max-24h": 66.828,
+      "mean-24h": 63.661,
+      "min-24h": 57.783
+    },
+    "temperature": {
+      "unit": "°C",
+      "datetime": "2026-10-18T04:30:00+01:00",
+      "value": 15.12,
+      "max-24h": 16.26,
+      "mean-24h": 15.653,
+      "min-24h": 15.12
+    }
+  }
+}

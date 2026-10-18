@@ -1,101 +1,115 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Swiss Hydro",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Unofficial connector: flow, level and water temperature of the Swiss FOEN stations.",
+    "fr": "Connecteur non officiel : débit, niveau et température de l'eau des stations suisses de l'OFEV."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-swiss-hydro:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-swiss-hydro/main/cover.png",
+  "categories": ["environment"],
+  "transports": ["cloud"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Swiss rivers and lakes in Gladys",
+        "fr": "Rivières et lacs suisses dans Gladys"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Unofficial connector, not affiliated with the Swiss Federal Office for the Environment (FOEN). For each station you choose (Aare, Rhône, Lake Geneva...), it brings into Gladys the flow, the water level, the water temperature, the date of the measurement, the official flood danger level and its thresholds. Public open data, no account. Source: FOEN. The FOEN measures every 10 minutes: the stations are read every 10 minutes at most. Never tested against the real service by a Gladys installation yet.",
+        "fr": "Connecteur non officiel, sans lien avec l'Office fédéral de l'environnement (OFEV). Pour chaque station choisie (Aar, Rhône, Léman…), il amène dans Gladys le débit, le niveau, la température de l'eau, la date de la mesure, le degré officiel de danger de crue et ses seuils. Données ouvertes publiques, sans compte. Source : OFEV. L'OFEV mesure toutes les 10 minutes : les stations sont lues toutes les 10 minutes au plus. Jamais testé contre le vrai service par une installation Gladys pour l'instant."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://www.hydrodaten.admin.ch/fr/aktuelle-lage",
+          "label": { "en": "FOEN stations map", "fr": "Carte des stations de l'OFEV" }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-swiss-hydro/blob/main/docs/fr.md",
+          "label": { "en": "Guide (French)", "fr": "Guide (français)" }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-swiss-hydro/blob/main/docs/en.md",
+          "label": { "en": "Guide (English)", "fr": "Guide (anglais)" }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
+      "key": "stations",
+      "type": "string",
+      "label": { "en": "Stations", "fr": "Stations" },
       "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+        "en": "FOEN station numbers, or names, separated by commas (20 at most). A name must match one station only; the \"Search stations\" button gives the numbers.",
+        "fr": "Numéros de stations de l'OFEV, ou noms, séparés par des virgules (20 au maximum). Un nom doit désigner une seule station ; le bouton « Chercher des stations » donne les numéros."
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
-    },
-    {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
-      "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
+      "placeholder": { "en": "2135, 2009", "fr": "2135, 2009" },
       "required": false,
-      "default": "celsius",
+      "default": ""
+    },
+    {
+      "key": "source",
+      "type": "select",
+      "label": { "en": "Data source", "fr": "Source des données" },
+      "description": {
+        "en": "FOEN open data (LINDAS): the official values and danger level. swisshydroapi: the service the swisshydrodata library reads, run by its author; the danger level is then computed from the official thresholds.",
+        "fr": "Données ouvertes OFEV (LINDAS) : les valeurs et le degré de danger officiels. swisshydroapi : le service que lit la bibliothèque swisshydrodata, tenu par son auteur ; le degré de danger est alors calculé à partir des seuils officiels."
+      },
+      "required": false,
+      "default": "foen",
       "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
+        {
+          "value": "foen",
+          "label": { "en": "FOEN open data (LINDAS)", "fr": "Données ouvertes OFEV (LINDAS)" }
+        },
+        {
+          "value": "swisshydroapi",
+          "label": { "en": "swisshydroapi (Bouni)", "fr": "swisshydroapi (Bouni)" }
+        }
       ]
     },
     {
-      "key": "poll_frequency",
+      "key": "poll_interval",
       "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "label": { "en": "Read interval (minutes)", "fr": "Intervalle de lecture (minutes)" },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "All the stations are read together. 10 minutes at least: the FOEN measures every 10 minutes.",
+        "fr": "Toutes les stations sont lues ensemble. 10 minutes au moins : l'OFEV mesure toutes les 10 minutes."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": 10,
+      "min": 10,
+      "max": 60
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
+      "key": "test_connection",
+      "timeout_seconds": 60,
+      "label": { "en": "Test the stations", "fr": "Tester les stations" },
+      "description": {
+        "en": "Reads the stations (unless read less than a minute ago) and shows their values.",
+        "fr": "Lit les stations (sauf si lues il y a moins d'une minute) et affiche leurs valeurs."
+      }
     },
     {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
+      "key": "search_stations",
+      "timeout_seconds": 60,
+      "label": { "en": "Search stations", "fr": "Chercher des stations" },
+      "description": {
+        "en": "Finds the stations of a river, a lake or a place, with their numbers.",
+        "fr": "Trouve les stations d'une rivière, d'un lac ou d'un lieu, avec leurs numéros."
+      },
       "fields": [
         {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "key": "query",
+          "type": "string",
+          "label": { "en": "River, lake or place", "fr": "Rivière, lac ou lieu" },
+          "placeholder": { "en": "e.g. Rhône", "fr": "ex. Rhône" },
           "required": true
         }
       ]
@@ -103,75 +117,150 @@
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "flow_above",
+      "label": { "en": "Flow above (Swiss Hydro)", "fr": "Débit au-dessus de (Swiss Hydro)" },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "The flow of a station reached the chosen value. Once per rise: armed again when the flow fell back under 95 % of it. For any other value, use the device trigger on the flow.",
+        "fr": "Le débit d'une station a atteint la valeur choisie. Une fois par montée : réarmé quand le débit est redescendu sous 95 % de cette valeur. Pour une autre valeur, utilisez le déclencheur d'appareil sur le débit."
       },
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "label": { "en": "Station", "fr": "Station" }
         },
         {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "key": "threshold",
+          "type": "select",
+          "required": true,
+          "label": { "en": "Flow (m³/s)", "fr": "Débit (m³/s)" },
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            { "value": "1", "label": { "en": "1 m³/s", "fr": "1 m³/s" } },
+            { "value": "2", "label": { "en": "2 m³/s", "fr": "2 m³/s" } },
+            { "value": "5", "label": { "en": "5 m³/s", "fr": "5 m³/s" } },
+            { "value": "10", "label": { "en": "10 m³/s", "fr": "10 m³/s" } },
+            { "value": "20", "label": { "en": "20 m³/s", "fr": "20 m³/s" } },
+            { "value": "50", "label": { "en": "50 m³/s", "fr": "50 m³/s" } },
+            { "value": "100", "label": { "en": "100 m³/s", "fr": "100 m³/s" } },
+            { "value": "150", "label": { "en": "150 m³/s", "fr": "150 m³/s" } },
+            { "value": "200", "label": { "en": "200 m³/s", "fr": "200 m³/s" } },
+            { "value": "300", "label": { "en": "300 m³/s", "fr": "300 m³/s" } },
+            { "value": "400", "label": { "en": "400 m³/s", "fr": "400 m³/s" } },
+            { "value": "500", "label": { "en": "500 m³/s", "fr": "500 m³/s" } },
+            { "value": "700", "label": { "en": "700 m³/s", "fr": "700 m³/s" } },
+            { "value": "1000", "label": { "en": "1,000 m³/s", "fr": "1 000 m³/s" } },
+            { "value": "1500", "label": { "en": "1,500 m³/s", "fr": "1 500 m³/s" } },
+            { "value": "2000", "label": { "en": "2,000 m³/s", "fr": "2 000 m³/s" } },
+            { "value": "3000", "label": { "en": "3,000 m³/s", "fr": "3 000 m³/s" } },
+            { "value": "4000", "label": { "en": "4,000 m³/s", "fr": "4 000 m³/s" } }
           ]
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "station",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": { "en": "Station number", "fr": "Numéro de la station" }
+        },
+        { "key": "station_name", "type": "string", "label": { "en": "Station", "fr": "Station" } },
+        {
+          "key": "threshold",
+          "type": "number",
+          "label": { "en": "Value reached (m³/s)", "fr": "Valeur atteinte (m³/s)" }
+        },
+        { "key": "flow", "type": "number", "label": { "en": "Flow (m³/s)", "fr": "Débit (m³/s)" } },
+        {
+          "key": "measured_at",
+          "type": "string",
+          "label": { "en": "Measured at (Swiss time)", "fr": "Date de la mesure (heure suisse)" }
+        },
+        {
+          "key": "summary",
+          "type": "string",
+          "label": { "en": "Summary (English)", "fr": "Résumé (anglais)" }
+        },
+        {
+          "key": "summary_fr",
+          "type": "string",
+          "label": { "en": "Summary (French)", "fr": "Résumé (français)" }
         }
       ]
-    }
-  ],
-  "scene_actions": [
+    },
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "danger_level_reached",
+      "label": {
+        "en": "Flood danger level reached (Swiss Hydro)",
+        "fr": "Degré de danger de crue atteint (Swiss Hydro)"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "The official FOEN flood danger level of a station rose to the chosen level (1: no or low danger, 5: very high danger). Fires again after the level went down and up again.",
+        "fr": "Le degré officiel de danger de crue de l'OFEV d'une station est monté au degré choisi (1 : danger nul ou faible, 5 : danger très fort). Se déclenche à nouveau après une baisse puis une hausse."
+      },
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
+          "label": { "en": "Station", "fr": "Station" }
+        },
+        {
+          "key": "level",
+          "type": "select",
+          "required": true,
+          "label": { "en": "Danger level", "fr": "Degré de danger" },
+          "options": [
+            { "value": "2", "label": { "en": "2 - moderate", "fr": "2 - limité" } },
+            { "value": "3", "label": { "en": "3 - considerable", "fr": "3 - marqué" } },
+            { "value": "4", "label": { "en": "4 - high", "fr": "4 - fort" } },
+            { "value": "5", "label": { "en": "5 - very high", "fr": "5 - très fort" } }
+          ]
         }
       ],
-      "outputs": [
+      "variables": [
         {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "key": "station",
+          "type": "string",
+          "label": { "en": "Station number", "fr": "Numéro de la station" }
+        },
+        { "key": "station_name", "type": "string", "label": { "en": "Station", "fr": "Station" } },
+        {
+          "key": "level",
+          "type": "number",
+          "label": { "en": "Level reached", "fr": "Degré atteint" }
+        },
+        {
+          "key": "danger_level",
+          "type": "number",
+          "label": { "en": "Current danger level", "fr": "Degré de danger actuel" }
+        },
+        {
+          "key": "previous_level",
+          "type": "number",
+          "label": { "en": "Previous danger level", "fr": "Degré de danger précédent" }
+        },
+        { "key": "flow", "type": "number", "label": { "en": "Flow (m³/s)", "fr": "Débit (m³/s)" } },
+        {
+          "key": "water_level",
+          "type": "number",
+          "label": { "en": "Water level (m)", "fr": "Niveau (m)" }
+        },
+        {
+          "key": "measured_at",
+          "type": "string",
+          "label": { "en": "Measured at (Swiss time)", "fr": "Date de la mesure (heure suisse)" }
+        },
+        {
+          "key": "summary",
+          "type": "string",
+          "label": { "en": "Summary (English)", "fr": "Résumé (anglais)" }
+        },
+        {
+          "key": "summary_fr",
+          "type": "string",
+          "label": { "en": "Summary (French)", "fr": "Résumé (français)" }
         }
       ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
     }
   ]
 }

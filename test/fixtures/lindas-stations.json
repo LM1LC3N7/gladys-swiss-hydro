@@ -1,0 +1,256 @@
+{
+  "head": {
+    "vars": ["obs", "id", "name", "wbName"]
+  },
+  "results": {
+    "bindings": [
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/lake/observation/2043"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2043"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Berlingen"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Bodensee, Untersee"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/lake/observation/2031"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2031"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Unterägeri"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Aegerisee"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2615"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2615"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Basel LHG"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Rhein"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2289"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2289"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Basel, Rheinhalle"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Rhein"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2135"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2135"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Bern, Schönau"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Aare"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2602"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2602"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Domat/Ems"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Rhein"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2602"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2602"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Domat/Ems"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Rhein"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2206"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2206"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Melera, (Valle Morobbia)"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Melera"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2009"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2009"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Porte du Scex"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Rhône"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/520"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "520"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Rämismühle"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Töss"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/520"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "520"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Rämismühle"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Töss"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2384"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2384"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Simplonpass"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Bisse kalte Wasser"
+        }
+      },
+      {
+        "obs": {
+          "type": "uri",
+          "value": "https://environment.ld.admin.ch/foen/hydro/river/observation/2384"
+        },
+        "id": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+          "type": "literal",
+          "value": "2384"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Simplonpass"
+        },
+        "wbName": {
+          "type": "literal",
+          "value": "Bisse kalte Wasser"
+        }
+      }
+    ]
+  }
+}

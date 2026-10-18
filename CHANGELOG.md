@@ -12,44 +12,21 @@ the notes of the version's GitHub Release.
 
 ### Added
 
-- A working example of scene triggers, scene actions and dashboard widgets
-  (Gladys 5.1.0 or later).
-- `CHANGELOG.md`, rolled by the Release workflow.
-- A GitHub Release for every version, with its changelog section as notes: the
-  Gladys Supervision page links each version to the repository's releases.
-- CI runs the tests on Node 22 and 24, and builds the Docker image.
-- Dependabot keeps the npm dependencies and the GitHub Actions up to date.
-- `SECURITY.md` (how to report a vulnerability) and `CLAUDE.md` (project rules
-  for contributors and coding assistants).
-- Manifest tests: `version` matches `package.json`, `docker_image` is tagged
-  with it, descriptions hold 10 to 100 characters, placeholders are
-  multi-language objects.
-- The latitude and longitude fields show an example value as placeholder.
+- The hydrological stations of the Swiss Federal Office for the Environment
+  (FOEN) in Gladys, from its open data (LINDAS), without account: one device
+  per station with the flow (m³/s, l/s converted), the water level (m), the
+  water temperature (°C), the date of the measurement in Swiss time, the
+  official flood danger level (1 to 5) and the thresholds of levels 2 to 5.
+- Stations chosen by number or by name (20 at most), and a "Search stations"
+  button that finds them by river, lake or place.
+- A second source, swisshydroapi, the service read by the swisshydrodata
+  library (ported to JavaScript), with the danger level computed from the
+  official thresholds.
+- Two scene triggers: "Flow above" (1 to 4,000 m³/s, once per rise) and
+  "Flood danger level reached" (2 to 5).
+- Read every 10 minutes by default, never faster than the interval: 429
+  pauses (1 minute to 6 hours), the last read, the readings and the trigger
+  states are kept in `/data` across restarts.
+- A "Test the stations" button that shows the values of every station.
 
-### Changed
-
-- Node.js 22 or later is required (Node 20 is end-of-life).
-- Integration SDK 0.15.0. The tests now run against the fake Gladys of the
-  SDK, which refuses the payloads Gladys refuses.
-- The refresh interval is one minute minimum, the fastest Gladys polls a
-  device. The plug's power is only sent when it changes, and every 30
-  minutes otherwise.
-
-### Fixed
-
-- Gladys refused the devices of the Discovery tab: the weather station and
-  the plug declared their poll frequency in seconds instead of one of the
-  values Gladys accepts, and were never polled. They now poll every minute,
-  and the readings follow the refresh interval of the configuration.
-
-- The release commit no longer fails `npm run format:check`: the Release
-  workflow updates the manifest `version` and `docker_image` in place instead
-  of re-printing the whole file with `jq`.
-- The integration can write to `/data`: the image creates the directory owned
-  by the `node` user, a new Docker volume was owned by root.
-- A sub-container running the integration's own image follows it to the new
-  tag at each release, as well as in the manifest of the build summary: it kept
-  the previous tag, which may not exist on the registry. Sub-containers on a
-  third-party image (a broker, a database...) keep theirs.
-
-[Unreleased]: https://github.com/GladysAssistant/integration-template-js/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-swiss-hydro/commits/main
