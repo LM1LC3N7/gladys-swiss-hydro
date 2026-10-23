@@ -1,6 +1,6 @@
 {
   "name": "gladys-swiss-hydro",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Gladys Assistant external integration: flow, level and water temperature of the Swiss FOEN hydrological stations.",
   "type": "module",
