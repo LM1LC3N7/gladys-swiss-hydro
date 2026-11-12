@@ -75,7 +75,7 @@ test('no mojibake and no BOM in the manifest, the docs and the code', () => {
 test('the store basics', () => {
   assert.equal(manifest.manifest_version, 1);
   assert.equal(manifest.type, 'device');
-  assert.match(manifest.gladys_version, />=5\.1\.0/);
+  assert.match(manifest.gladys_version, />=5\.3\.0/);
   assert.ok(manifest.categories.length >= 1 && manifest.categories.length <= 3);
   for (const lang of ['en', 'fr']) {
     const length = manifest.description[lang].length;
@@ -252,4 +252,13 @@ test('every feature uses a unit the core lists for its category', () => {
     assert.ok(!['switch', 'binary'].includes(feature.category));
     assert.equal(feature.read_only, true);
   }
+});
+
+test('the catalog countries: Switzerland, which needs Gladys >= 5.3.0', () => {
+  assert.deepEqual(manifest.countries, ['CH']);
+  const [major, minor] = manifest.gladys_version
+    .match(/>=\s*(\d+)\.(\d+)/)
+    .slice(1)
+    .map(Number);
+  assert.ok(major > 5 || (major === 5 && minor >= 3), 'countries needs Gladys 5.3.0');
 });
