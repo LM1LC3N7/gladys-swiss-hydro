@@ -2,7 +2,7 @@
 
 ## Before announcing
 
-- [ ] Run it in a real Gladys 5.1+: the devices of the Discovery tab, their
+- [ ] Run it in a real Gladys 5.3+: the devices of the Discovery tab, their
       values, the status, both buttons, both scene triggers (the trigger
       editor with its `devices` select). Never done yet.
 - [ ] Check the CI (Docker build, Node 22 and 24), then run the store
